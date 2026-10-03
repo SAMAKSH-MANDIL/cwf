@@ -1,0 +1,53 @@
+version: '3.8'
+
+services:
+  api:
+    build:
+      context: .
+      dockerfile: infra/docker/Dockerfile.api
+    container_name: decentralized_ai_api
+    ports:
+      - "8000:8000"
+    environment:
+      - ENV=production
+      - API_PORT=8000
+      - DATABASE_URL=sqlite:///./network_state.db
+      - REDIS_URL=redis://redis:6379/0
+    volumes:
+      - ./storage:/app/storage
+      - ./zkml/circuits:/app/zkml/circuits
+    depends_on:
+      - redis
+
+  web:
+    build:
+      context: ./apps/web
+      dockerfile: Dockerfile
+    container_name: decentralized_ai_web
+    ports:
+      - "3000:3000"
+    environment:
+      - NEXT_PUBLIC_API_URL=http://api:8000
+    depends_on:
+      - api
+
+  redis:
+    image: redis:7.2-alpine
+    container_name: decentralized_ai_redis
+    ports:
+      - "6379:6379"
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: decentralized_ai_postgres
+    environment:
+      POSTGRES_USER: ai_user
+      POSTGRES_PASSWORD: ai_password
+      POSTGRES_DB: decentralized_ai
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+volumes:
+  postgres_data:
