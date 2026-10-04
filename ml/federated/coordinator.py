@@ -184,3 +184,58 @@ class FederatedCoordinator:
 
         self.round_history.append(round_record)
         return round_record
+
+    def deploy_dataset(
+        self,
+        X_val: np.ndarray,
+        y_val: np.ndarray,
+        partitions: List[Dict[str, Any]],
+        model_name: str,
+        input_dim: int,
+        hidden_layers: Optional[List[int]] = None,
+        problem_type: str = "logistic_regression",
+    ) -> Dict[str, Any]:
+        """
+        Deploys a custom or preset dataset across all registered edge clients,
+        initializes the dynamic model, and resets the training round counter.
+        """
+        from ml.models.dynamic_model import DynamicNeuralNetPure
+
+        self.model_id = model_name
+        self.global_model = DynamicNeuralNetPure(
+            input_dim=input_dim,
+            hidden_layers=hidden_layers,
+            model_type=problem_type,
+            seed=42,
+        )
+        self.X_val = X_val
+        self.y_val = y_val
+        self.current_round = 0
+
+        # Assign private partitions across registered client nodes
+        client_ids = list(self.clients.keys())
+        allocated_counts = {}
+        for idx, p in enumerate(partitions):
+            if idx < len(client_ids):
+                c_id = client_ids[idx]
+                client = self.clients[c_id]
+                client.update_dataset_and_model((p["X"], p["y"]), self.global_model)
+                allocated_counts[client.name] = p["num_samples"]
+
+        # Export ONNX graph for the new dynamic architecture
+        onnx_path = os.path.join("./zkml/circuits", f"{model_name.lower().replace(' ', '_')}.onnx")
+        self.global_model.export_onnx(onnx_path)
+
+        arch_str = getattr(self.global_model, "get_architecture_string", lambda: str(input_dim))()
+        return {
+            "model_id": self.model_id,
+            "problem_type": problem_type,
+            "input_dim": input_dim,
+            "hidden_layers": getattr(self.global_model, "hidden_layers", []),
+            "architecture": arch_str,
+            "parameters_count": self.global_model.total_parameters(),
+            "model_hash": self.global_model.compute_hash(),
+            "allocated_devices": allocated_counts,
+            "initial_accuracy": self.global_model.evaluate(self.X_val, self.y_val)["accuracy"],
+        }
+

@@ -295,12 +295,40 @@ def get_passport(wallet_address: Optional[str] = None):
 
 
 # -------------------------------------------------------------
-# Compute Providers
+# Compute Providers & Dynamic Device Registration (Level 1)
 # -------------------------------------------------------------
 @app.get("/api/providers")
 def get_providers():
     """Returns registered decentralized compute nodes and hardware telemetry."""
     return orchestrator.solana.get_all_providers()
+
+
+class RegisterDeviceRequest(BaseModel):
+    name: str
+    hardware_tier: str = "RTX4090"
+    vram_gb: int = 16
+    samples_count: int = 220
+    wallet_address: Optional[str] = None
+
+
+@app.post("/api/devices/register")
+@app.post("/api/providers/register")
+def register_device(payload: RegisterDeviceRequest):
+    """
+    Dynamically registers a new virtualized edge device (Hospital/Laptop/Phone)
+    into the active federated network for multi-device simulation.
+    """
+    if not payload.name.strip():
+        raise HTTPException(status_code=400, detail="Device name cannot be blank")
+
+    result = orchestrator.register_new_device(
+        name=payload.name,
+        hardware_tier=payload.hardware_tier,
+        vram_gb=payload.vram_gb,
+        samples_count=payload.samples_count,
+        wallet_address=payload.wallet_address,
+    )
+    return result
 
 
 # -------------------------------------------------------------
@@ -315,3 +343,69 @@ def get_current_user():
         "role": "Healthcare Node Operator",
         "chains": ["Arbitrum Sepolia", "Solana Devnet", "Zcash Reference Pavilion"],
     }
+
+
+# -------------------------------------------------------------
+# AutoML Dataset Ingestion, Profiling & Dynamic Edge Deploy
+# -------------------------------------------------------------
+
+class ProfileDatasetRequest(BaseModel):
+    csv_text: str
+
+class LoadPresetRequest(BaseModel):
+    preset_key: str
+
+class DeployDatasetRequest(BaseModel):
+    csv_text: str
+    target_col: str
+    feature_configs: Dict[str, Dict[str, Any]]
+    problem_type: str = "logistic_regression"  # "logistic_regression" | "linear_regression"
+    model_name: Optional[str] = None
+    hidden_layers: Optional[List[int]] = []
+
+
+@app.get("/api/datasets/presets")
+def get_dataset_presets():
+    """Returns curated Kaggle / Hugging Face medical and benchmark datasets."""
+    return orchestrator.get_dataset_presets()
+
+
+@app.post("/api/datasets/load-preset")
+def load_preset_dataset(payload: LoadPresetRequest):
+    """Loads a preset dataset and generates schema profile."""
+    try:
+        return orchestrator.load_preset_csv(payload.preset_key)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.post("/api/datasets/profile")
+def profile_custom_dataset(payload: ProfileDatasetRequest):
+    """Profiles raw CSV content, infers data types, and recommends encodings."""
+    if not payload.csv_text.strip():
+        raise HTTPException(status_code=400, detail="CSV text cannot be empty.")
+    try:
+        return orchestrator.profile_dataset(payload.csv_text)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.post("/api/datasets/deploy")
+def deploy_dataset(payload: DeployDatasetRequest):
+    """
+    Applies user-selected feature encodings (binary / one-hot / numeric),
+    partitions data across all edge devices, and initializes the dynamic model.
+    """
+    try:
+        result = orchestrator.deploy_dataset(
+            csv_text=payload.csv_text,
+            target_col=payload.target_col,
+            feature_configs=payload.feature_configs,
+            problem_type=payload.problem_type,
+            model_name=payload.model_name,
+            hidden_layers=payload.hidden_layers,
+        )
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+

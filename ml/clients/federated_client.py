@@ -104,3 +104,18 @@ class FederatedClient:
             "sample_witness_input": sample_x.tolist(),
             "sample_witness_output": pred_logits.tolist(),
         }
+
+    def update_dataset_and_model(self, private_data: Tuple[np.ndarray, np.ndarray], model_template):
+        """Updates client's local private dataset partition and adapts model architecture."""
+        self._X_private, self._y_private = private_data
+        if hasattr(model_template, "input_dim"):
+            from ml.models.dynamic_model import DynamicNeuralNetPure
+            seed = int(hashlib.md5(self.client_id.encode()).hexdigest()[:6], 16)
+            self.local_model = DynamicNeuralNetPure(
+                input_dim=model_template.input_dim,
+                hidden_layers=getattr(model_template, "hidden_layers", []),
+                model_type=model_template.model_type,
+                seed=seed,
+            )
+            self.local_model.set_weights_flat(model_template.get_weights_flat())
+
