@@ -32,8 +32,12 @@ class SolanaRewardService:
         self.tier_multipliers = {
             "H100": 2.5,
             "A100": 2.0,
+            "AWS A100 TensorCore": 2.0,
             "RTX4090": 1.5,
+            "RTX 4090": 1.5,
+            "Apple M3 Max": 1.4,
             "T4": 1.0,
+            "Jetson Orin Nano": 0.8,
             "EdgeDevice": 0.8,
         }
 
@@ -48,9 +52,10 @@ class SolanaRewardService:
     def _initialize_default_providers(self):
         """Pre-registers the benchmark simulated hospital/edge nodes."""
         nodes = [
-            ("0x71C66336071ffd4e773E34dac3Ca0A6688211eef", "Hospital Alpha Edge Node", "RTX4090", 24),
-            ("0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266", "Hospital Beta GPU Cluster", "A100", 80),
-            ("0x90F79bf6EB2c4f870365E785982E1f101E93b906", "Clinic Gamma Micro-Server", "T4", 16),
+            ("0x71C66336071ffd4e773E34dac3Ca0A6688211eef", "Hospital Alpha Enclave", "RTX 4090", 24),
+            ("0x3A8F91B4C0257B881eAf06aDb5d10F9c976901A2", "Clinic Beta Edge Node", "Apple M3 Max", 36),
+            ("0xE1294C668b828f7c9eF02559b36C67341De0923C", "Research Lab Gamma", "AWS A100 TensorCore", 80),
+            ("0x98Fc44aB012C5E7290bC1864aDe7401c900D85Fb", "Mobile Diagnostic Unit Delta", "Jetson Orin Nano", 8),
         ]
         for wallet, name, tier, vram in nodes:
             self.register_provider(

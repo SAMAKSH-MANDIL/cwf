@@ -61,14 +61,22 @@ class FederatedClient:
         # 2. Local Training Loop (Mini-batch SGD)
         n = self.num_samples
         indices = np.arange(n)
-        for _ in range(epochs):
+        epoch_logs = []
+        for ep in range(epochs):
             np.random.shuffle(indices)
+            batch_losses = []
             for start in range(0, n, batch_size):
                 end = min(start + batch_size, n)
                 batch_idx = indices[start:end]
                 X_batch = self._X_private[batch_idx]
                 y_batch = self._y_private[batch_idx]
-                self.local_model.train_step(X_batch, y_batch, lr=learning_rate)
+                loss = self.local_model.train_step(X_batch, y_batch, lr=learning_rate)
+                batch_losses.append(loss)
+            avg_loss = float(np.mean(batch_losses)) if batch_losses else 0.0
+            epoch_logs.append({
+                "epoch": ep + 1,
+                "loss": round(avg_loss, 4),
+            })
 
         # 3. Post-training evaluation
         eval_after = self.local_model.evaluate(self._X_private, self._y_private)
@@ -82,7 +90,6 @@ class FederatedClient:
         update_hash = hashlib.sha256(delta_bytes).hexdigest()
 
         # 6. Extract a single normalized validation sample for zkML witness constraint binding
-        # (Proof demonstrates the model forward pass produces valid classification on bounded input)
         sample_x = self._X_private[0:1].copy()
         pred_logits, _ = self.local_model.forward(sample_x)
 
@@ -98,6 +105,7 @@ class FederatedClient:
             "delta_norm": float(np.linalg.norm(delta_w)),
             "eval_before": eval_before,
             "eval_after": eval_after,
+            "epoch_logs": epoch_logs,
             "accuracy_gain": float(eval_after["accuracy"] - eval_before["accuracy"]),
             "loss_reduction": float(eval_before["loss"] - eval_after["loss"]),
             # Metadata for zkML prover

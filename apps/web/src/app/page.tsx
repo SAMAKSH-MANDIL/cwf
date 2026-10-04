@@ -1,406 +1,940 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import Link from "next/link";
 import {
-  Activity,
+  ShieldCheck,
   Cpu,
   Database,
-  ShieldCheck,
   Coins,
+  ArrowDownRight,
   ArrowUpRight,
+  ArrowRight,
   CheckCircle2,
-  Zap,
-  Layers,
   Lock,
-  RefreshCw,
-  Play,
-  Plus,
+  Zap,
+  Activity,
+  ChevronRight,
+  Layers,
+  Sparkles,
   Server,
-  Box,
-  FolderPlus,
-  Sliders
+  FileCode2,
+  Compass,
+  Code2
 } from "lucide-react";
-import NetworkHologram3D from "@/components/NetworkHologram3D";
 
-export default function DashboardPage() {
-  const [stats, setStats] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
-  const [runningRound, setRunningRound] = useState(false);
-  const [roundResult, setRoundResult] = useState<any>(null);
+export default function LandingPage() {
+  const [activeStep, setActiveStep] = useState(0);
+  const [selectedChain, setSelectedChain] = useState<"arb" | "sol" | "zec">("arb");
 
-  const fetchStats = async () => {
-    try {
-      const res = await fetch("/api/network/stats");
-      if (res.ok) {
-        const data = await res.json();
-        setStats(data);
-      }
-    } catch (e) {
-      console.error("Failed to fetch stats", e);
-    } finally {
-      setLoading(false);
+  const [simulating, setSimulating] = useState(false);
+  const [simRound, setSimRound] = useState(12);
+  const [simAccuracy, setSimAccuracy] = useState(94.8);
+  const [simStep, setSimStep] = useState<string>("Standby • 3 Nodes Ready for FedAvg");
+
+  const handleSimulateRound = () => {
+    if (simulating) return;
+    setSimulating(true);
+    setSimStep("1/3 Dispatching weights to edge hardware...");
+
+    setTimeout(() => {
+      setSimStep("2/3 Generating Halo2 zkML proof (14,208 gates)...");
+      setTimeout(() => {
+        setSimStep("3/3 Arbitrum L2 verified ✓ Solana rewarded 10 SOL ✓");
+        setSimRound((prev) => prev + 1);
+        setSimAccuracy((prev) => Number((prev + 0.4).toFixed(1)));
+        setTimeout(() => {
+          setSimulating(false);
+          setSimStep("Round Settled • 0 Bytes Raw Data Leaked ✓");
+        }, 1200);
+      }, 1200);
+    }, 1100);
+  };
+
+  const scrollTo = (id: string) => {
+    if (id === "top") {
+      window.scrollTo({ top: 0, behavior: "smooth" });
+      return;
+    }
+    const el = document.getElementById(id);
+    if (el) {
+      el.scrollIntoView({ behavior: "smooth", block: "start" });
     }
   };
 
-  useEffect(() => {
-    fetchStats();
-    const interval = setInterval(fetchStats, 6000);
-    return () => clearInterval(interval);
-  }, []);
-
-  const triggerRound = async () => {
-    setRunningRound(true);
-    try {
-      const res = await fetch("/api/demo/run-round", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ epochs: 3, learning_rate: 0.03 }),
-      });
-      if (res.ok) {
-        const data = await res.json();
-        setRoundResult(data);
-        await fetchStats();
-      }
-    } catch (e) {
-      console.error("Failed to run round", e);
-    } finally {
-      setRunningRound(false);
+  const architectureSteps = [
+    {
+      step: "01",
+      title: "Local Edge Device Training",
+      tag: "Zero-Leakage Privacy",
+      desc: "Raw datasets (medical records, financial transactions, private user actions) remain strictly confined to the participant's hardware. Models train locally for E epochs to generate gradient parameter updates (ΔW).",
+      formula: "W_{i}^{(t+1)} = W^{(t)} - \\eta \\nabla \\mathcal{L}_i(W^{(t)}; \\mathcal{D}_i)",
+      details: [
+        "No raw sample is ever broadcast or uploaded to external servers",
+        "Supports heterogeneous edge hardware: Apple M-series, RTX 4090, TensorRT, and Android NPU",
+        "Local differential privacy (DP-SGD) with calibrated Gaussian noise clipping"
+      ]
+    },
+    {
+      step: "02",
+      title: "zkML Proof Synthesis (Halo2 / EZKL)",
+      tag: "Computational Integrity",
+      desc: "The edge node compiles the forward and backward training graphs into arithmetic constraint circuits. A Halo2 SNARK proof (π) is synthesized, mathematically guaranteeing that the claimed gradients were genuinely calculated from the model architecture.",
+      formula: "\\pi = \\text{Prover}(\\text{Circuit}_{\\text{ONNX}}, \\, \\mathcal{W}, \\, \\Delta W)",
+      details: [
+        "Arithmetized over the BN254 elliptic curve scalar field",
+        "Validates model quantization, activation layers, and learning rate execution",
+        "Succinct cryptographic proof verified on-chain in O(1) constant gas"
+      ]
+    },
+    {
+      step: "03",
+      title: "Byzantine-Resilient FedAvg Aggregator",
+      tag: "Poisoning Defense",
+      desc: "Before incorporating edge updates into the global model, the aggregator applies Euclidean distance clustering, norm clipping, and Multi-Krum outlier rejection to detect and quarantine adversarial updates.",
+      formula: "\\Delta W_{\\text{global}} = \\sum_{k=1}^{K} \\frac{n_k}{n} \\cdot \\text{Clip}(\\Delta W_k, C)",
+      details: [
+        "Defends against backdoor poisoning, Sybil inflation, and label-flipping attacks",
+        "Adaptive weight assignment based on participant historical accuracy delta",
+        "Generates cryptographic IPFS CID hash for the new global model tensor"
+      ]
+    },
+    {
+      step: "04",
+      title: "Multi-Chain Consensus & Reward Dispatch",
+      tag: "Arbitrum + Solana + Zcash",
+      desc: "The verified state and model lineage are anchored to Arbitrum L2 contracts. Verified events trigger the Solana reward program, which instantly distributes tokens to contributors based on compute tier and contribution quality.",
+      formula: "\\text{Reward} = \\text{Quality} \\times \\text{Validity} \\times \\text{ComputeTier} \\times \\text{Utility}",
+      details: [
+        "Arbitrum: ZKVerifier.sol executes pairing checks and logs ModelRegistry lineage",
+        "Solana: High-frequency PDA program distributes micro-incentives without high gas fees",
+        "Zcash Reference: Shielded edge privacy ensuring contributor identity confidentiality"
+      ]
     }
-  };
+  ];
 
   return (
-    <div className="space-y-8 max-w-7xl mx-auto">
-      {/* Hero Header */}
-      <div className="p-8 rounded-3xl glass-panel relative overflow-hidden flex flex-col md:flex-row md:items-center justify-between gap-6 border border-slate-800">
-        <div className="absolute -right-20 -top-20 w-96 h-96 bg-cyan-500/10 rounded-full blur-3xl pointer-events-none"></div>
-        <div className="absolute -left-20 -bottom-20 w-96 h-96 bg-purple-500/10 rounded-full blur-3xl pointer-events-none"></div>
+    <div className="min-h-screen bg-[#FBF7F0] text-[#1C1917] selection:bg-[#E05338] selection:text-white font-sans p-3 sm:p-6 md:p-8 lg:p-12 transition-colors duration-300">
+      {/* Master Framed Poster Container */}
+      <div id="top" className="max-w-[1360px] mx-auto border-[1.5px] border-[#1C1917] bg-[#FAF7F2] rounded-xl sm:rounded-2xl lg:rounded-3xl overflow-hidden shadow-2xl relative">
 
-        <div className="relative z-10 space-y-2">
-          <div className="inline-flex items-center space-x-2 px-3.5 py-1 rounded-full bg-cyan-500/10 border border-cyan-500/20 text-cyan-400 text-xs font-mono font-medium">
-            <Lock className="w-3.5 h-3.5" />
-            <span>Zero-Knowledge Federated Intelligence</span>
-          </div>
-          <h1 className="text-3xl md:text-4xl font-extrabold tracking-tight text-white">
-            DECENTRALIZED AI NETWORK
-          </h1>
-          <p className="text-slate-400 text-sm max-w-2xl leading-relaxed">
-            Collaboratively train machine-learning models without sharing raw data. Zero-Knowledge proofs verify ML computation on <span className="text-cyan-300 font-semibold">Arbitrum</span>, coordinated with incentives on <span className="text-emerald-400 font-semibold">Solana</span>, inspired by <span className="text-purple-300 font-semibold">Zcash</span> cryptography.
-          </p>
-        </div>
+        {/* ========================================================================= */}
+        {/* HEADER SECTION (Grid Boxed Header with Working Smooth-Scroll Links)       */}
+        {/* ========================================================================= */}
+        <header className="grid grid-cols-1 md:grid-cols-12 border-b-[1.5px] border-[#1C1917] divide-y md:divide-y-0 md:divide-x-[1.5px] divide-[#1C1917] bg-[#FAF7F2]">
 
-        <div className="relative z-10 flex flex-wrap items-center gap-3">
-          <Link
-            href="/datasets"
-            className="flex items-center space-x-2 px-5 py-3 rounded-2xl bg-cyan-500/20 hover:bg-cyan-500/30 text-cyan-300 border border-cyan-500/40 text-sm font-semibold shadow-sm transition-all hover:scale-102"
-          >
-            <FolderPlus className="w-4 h-4 text-cyan-400" />
-            <span>AutoML Datasets</span>
-          </Link>
-
-          <Link
-            href="/training"
-            className="flex items-center space-x-2 px-5 py-3 rounded-2xl bg-slate-800/90 hover:bg-slate-700/90 text-cyan-300 border border-cyan-500/30 text-sm font-semibold shadow-sm transition-all hover:scale-102"
-          >
-            <Plus className="w-4 h-4 text-cyan-400" />
-            <span>Manage Devices</span>
-          </Link>
-
-          <button
-            onClick={triggerRound}
-            disabled={runningRound}
-            className="flex items-center justify-center space-x-2.5 px-7 py-3 rounded-2xl bg-gradient-to-r from-cyan-500 via-indigo-500 to-purple-600 hover:from-cyan-400 hover:to-purple-500 text-white font-bold text-sm shadow-lg shadow-cyan-500/25 transition-all hover:scale-102 active:scale-98 disabled:opacity-50"
-          >
-            {runningRound ? (
-              <>
-                <RefreshCw className="w-4 h-4 animate-spin" />
-                <span>Simulating Round...</span>
-              </>
-            ) : (
-              <>
-                <Play className="w-4 h-4 fill-current" />
-                <span>Run Training Round</span>
-              </>
-            )}
-          </button>
-        </div>
-      </div>
-
-      {/* 3D Neural Constellation & Interactive Spatial Visualizer */}
-      <div className="hologram-card p-6 md:p-8 flex flex-col lg:flex-row items-center justify-between gap-8 border border-cyan-500/30">
-        <div className="w-full lg:w-3/5 h-80 relative flex items-center justify-center">
-          <NetworkHologram3D 
-            activeNodesCount={stats?.active_contributors || 4} 
-            isTraining={runningRound} 
-          />
-        </div>
-        <div className="w-full lg:w-2/5 space-y-4 font-mono">
-          <div className="inline-flex items-center space-x-2 px-3 py-1 rounded-full bg-cyan-500/10 border border-cyan-500/30 text-cyan-400 text-xs font-bold">
-            <Box className="w-3.5 h-3.5" />
-            <span>Interactive 3D Spatial Network</span>
-          </div>
-          <h2 className="text-xl md:text-2xl font-black text-white tracking-tight">
-            Decentralized 3D Topography
-          </h2>
-          <p className="text-xs text-slate-300 font-sans leading-relaxed">
-            The core wireframe represents the aggregated global model parameter tensor, while orbiting vertices represent private edge nodes running local gradient steps and Halo2 KZG circuit provers.
-          </p>
-          <div className="grid grid-cols-2 gap-3 pt-2 text-xs">
-            <div className="p-3 rounded-xl bg-slate-900/80 border border-cyan-500/20">
-              <span className="text-slate-400 block text-[10px] uppercase">Orbiting Nodes</span>
-              <span className="text-cyan-400 font-bold text-base">{stats?.active_contributors ?? 4} Nodes</span>
-            </div>
-            <div className="p-3 rounded-xl bg-slate-900/80 border border-emerald-500/20">
-              <span className="text-slate-400 block text-[10px] uppercase">3D Render Engine</span>
-              <span className="text-emerald-400 font-bold text-base">WebGL / Three.js</span>
-            </div>
-            <div className="p-3 rounded-xl bg-slate-900/80 border border-purple-500/20">
-              <span className="text-slate-400 block text-[10px] uppercase">ZK Circuit Field</span>
-              <span className="text-purple-300 font-bold text-base">BN254 Scalar</span>
-            </div>
-            <div className="p-3 rounded-xl bg-slate-900/80 border border-pink-500/20">
-              <span className="text-slate-400 block text-[10px] uppercase">Simulation Speed</span>
-              <span className="text-pink-400 font-bold text-base">{runningRound ? "2.5x Turbo" : "1.0x Normal"}</span>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* KPI Cards Grid */}
-      <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-4">
-        {[
-          { label: "Active Nodes", val: stats?.active_contributors ?? 3, icon: Cpu, color: "text-cyan-400", border: "border-cyan-500/20" },
-          { label: "Training Rounds", val: stats?.training_rounds ?? 0, icon: Layers, color: "text-indigo-400", border: "border-indigo-500/20" },
-          { label: "Verified Proofs", val: stats?.verified_contributions ?? 0, icon: CheckCircle2, color: "text-emerald-400", border: "border-emerald-500/20" },
-          { label: "ZK Constraints", val: "14,208", icon: ShieldCheck, color: "text-purple-400", border: "border-purple-500/20" },
-          { label: "Models Registered", val: stats?.models_count ?? 1, icon: Database, color: "text-blue-400", border: "border-blue-500/20" },
-          { label: "Global Accuracy", val: `${stats?.global_accuracy ?? 0}%`, icon: Zap, color: "text-amber-400", border: "border-amber-500/20" },
-          { label: "Total Rewards", val: `${stats?.total_rewards_distributed ?? 0} SOL`, icon: Coins, color: "text-pink-400", border: "border-pink-500/20" },
-        ].map((item, idx) => {
-          const Icon = item.icon;
-          return (
-            <div key={idx} className={`p-4 rounded-2xl glass-panel card-3d border ${item.border} space-y-2 hover:scale-102 transition-all`}>
-              <div className="flex items-center justify-between text-slate-400">
-                <span className="text-[10px] font-mono font-medium uppercase tracking-wider">{item.label}</span>
-                <Icon className={`w-4 h-4 ${item.color}`} />
-              </div>
-              <div className="text-xl md:text-2xl font-bold font-mono text-white">
-                {loading ? "..." : item.val}
-              </div>
-            </div>
-          );
-        })}
-      </div>
-
-      {/* Multi-Chain Infrastructure Status Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        {/* Arbitrum */}
-        <div className="p-6 rounded-3xl glass-panel border border-cyan-500/30 space-y-4 relative overflow-hidden">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-3">
-              <div className="w-10 h-10 rounded-2xl bg-cyan-500/15 flex items-center justify-center text-cyan-400 font-extrabold font-mono text-sm border border-cyan-500/30">
-                ARB
+          {/* Box 1: Stylized Terracotta Logo + Monogram */}
+          <div className="md:col-span-4 p-4 sm:p-5 flex items-center justify-between md:justify-start space-x-3.5">
+            <Link href="/" className="flex items-center space-x-3 group">
+              <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-2xl bg-[#E05338] flex items-center justify-center border-[1.5px] border-[#1C1917] shadow-[2px_2px_0px_#1C1917] group-hover:rotate-6 transition-transform">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M12 3C7.02944 3 3 7.02944 3 12C3 16.9706 7.02944 21 12 21C16.9706 21 21 16.9706 21 12H12V3Z" fill="#FAF7F2" stroke="#1C1917" strokeWidth="1.5" />
+                  <circle cx="16" cy="7" r="3" fill="#E5A638" stroke="#1C1917" strokeWidth="1.2" />
+                </svg>
               </div>
               <div>
-                <h3 className="text-sm font-bold text-white">Arbitrum Layer 2</h3>
-                <p className="text-xs text-slate-400 font-mono">Verification & Provenance</p>
+                <div className="font-display font-extrabold text-base tracking-tight text-[#1C1917] uppercase flex items-center space-x-1.5">
+                  <span>FedZero</span>
+                  <span className="w-2 h-2 rounded-full bg-[#E05338] animate-ping"></span>
+                </div>
+                <div className="font-mono text-[10px] tracking-widest text-[#1C1917]/70 uppercase">
+                  Federated • Zero-Knowledge Network
+                </div>
               </div>
-            </div>
-            <span className="flex items-center space-x-1.5 px-2.5 py-1 rounded-full text-[11px] font-mono font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
-              <span>Connected</span>
-            </span>
-          </div>
-          <div className="text-xs text-slate-300 space-y-2 font-mono bg-slate-900/60 p-3.5 rounded-xl border border-slate-800">
-            <div className="flex justify-between">
-              <span className="text-slate-400">ZKVerifier.sol:</span>
-              <span className="text-cyan-400 font-bold">0x5FbD...aa3</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-slate-400">ModelRegistry.sol:</span>
-              <span className="text-cyan-400 font-bold">0xe7f1...0512</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-slate-400">AIPassport.sol:</span>
-              <span className="text-cyan-400 font-bold">0xCf7E...0Fc9</span>
-            </div>
-          </div>
-          <p className="text-xs text-slate-400 leading-relaxed">
-            Verifies succinct zkML Groth16/KZG pairings in constant gas and preserves immutable model version CIDs.
-          </p>
-        </div>
-
-        {/* Solana */}
-        <div className="p-6 rounded-3xl glass-panel border border-emerald-500/30 space-y-4 relative overflow-hidden">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-3">
-              <div className="w-10 h-10 rounded-2xl bg-emerald-500/15 flex items-center justify-center text-emerald-400 font-extrabold font-mono text-sm border border-emerald-500/30">
-                SOL
-              </div>
-              <div>
-                <h3 className="text-sm font-bold text-white">Solana High-Throughput</h3>
-                <p className="text-xs text-slate-400 font-mono">Compute & Token Rewards</p>
-              </div>
-            </div>
-            <span className="flex items-center space-x-1.5 px-2.5 py-1 rounded-full text-[11px] font-mono font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
-              <span>Connected</span>
-            </span>
-          </div>
-          <div className="text-xs text-slate-300 space-y-2 font-mono bg-slate-900/60 p-3.5 rounded-xl border border-slate-800">
-            <div className="flex justify-between">
-              <span className="text-slate-400">Program ID:</span>
-              <span className="text-emerald-400 font-bold">Compute1...1111</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-slate-400">Reward Rate:</span>
-              <span className="text-emerald-400 font-bold">10.00 Base Token</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-slate-400">Anti-Sybil:</span>
-              <span className="text-emerald-400 font-bold">Rate-Limited PDA</span>
-            </div>
-          </div>
-          <p className="text-xs text-slate-400 leading-relaxed">
-            Dispatches automated token rewards based on model quality, compute tiers (RTX 4090, A100, T4), and proof validity.
-          </p>
-        </div>
-
-        {/* Zcash Pavilion */}
-        <div className="p-6 rounded-3xl glass-panel border border-purple-500/30 space-y-4 relative overflow-hidden">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-3">
-              <div className="w-10 h-10 rounded-2xl bg-purple-500/15 flex items-center justify-center text-purple-400 font-extrabold font-mono text-sm border border-purple-500/30">
-                ZEC
-              </div>
-              <div>
-                <h3 className="text-sm font-bold text-white">Zcash Cryptographic Pavilion</h3>
-                <p className="text-xs text-slate-400 font-mono">Zero-Knowledge Reference</p>
-              </div>
-            </div>
-            <span className="flex items-center space-x-1.5 px-2.5 py-1 rounded-full text-[11px] font-mono font-bold bg-purple-500/10 text-purple-400 border border-purple-500/20">
-              <span className="w-1.5 h-1.5 rounded-full bg-purple-400"></span>
-              <span>Operational</span>
-            </span>
-          </div>
-          <div className="text-xs text-slate-300 space-y-2 font-mono bg-slate-900/60 p-3.5 rounded-xl border border-slate-800">
-            <div className="flex justify-between">
-              <span className="text-slate-400">Principle:</span>
-              <span className="text-purple-300 font-bold">Shielded Computation</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-slate-400">ZK Paradigm:</span>
-              <span className="text-purple-300 font-bold">Halo2 / KZG SNARK</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-slate-400">Raw Data Uploaded:</span>
-              <span className="text-emerald-400 font-bold">0.00 Bytes (100% Private)</span>
-            </div>
-          </div>
-          <p className="text-xs text-slate-400 leading-relaxed">
-            The foundational privacy reference: just as Zcash proves valid transactions without disclosing amounts, we prove valid ML computations without disclosing private datasets.
-          </p>
-        </div>
-      </div>
-
-      {/* Latest Live Round Execution Card (if triggered) */}
-      {roundResult && (
-        <div className="p-7 rounded-3xl glass-panel-glow border border-cyan-500/40 space-y-5">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-2 text-cyan-400 font-bold text-base">
-              <CheckCircle2 className="w-5 h-5 text-emerald-400" />
-              <span>Training Round #{roundResult.round_id} Settled Successfully</span>
-            </div>
-            <span className="text-xs font-mono text-emerald-400 px-3 py-1 rounded-full bg-emerald-950/60 border border-emerald-500/30">
-              0 Raw Data Uploaded
-            </span>
+            </Link>
           </div>
 
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-xs font-mono">
-            <div className="p-4 rounded-xl bg-slate-900/80 border border-slate-800">
-              <div className="text-slate-400">New Global Hash</div>
-              <div className="text-cyan-300 truncate mt-1 font-bold">{roundResult.new_hash}</div>
+          {/* Box 2: Centered Editorial Working Nav Links */}
+          <nav className="md:col-span-5 p-4 sm:p-5 flex items-center justify-center space-x-5 lg:space-x-8 text-xs font-display font-bold uppercase tracking-wider text-[#1C1917]">
+            <button
+              onClick={() => scrollTo("top")}
+              className="text-[#E05338] border-b-2 border-[#E05338] pb-0.5 hover:opacity-80 transition-all cursor-pointer"
+            >
+              HOME
+            </button>
+            <button
+              onClick={() => scrollTo("about")}
+              className="hover:text-[#E05338] transition-colors pb-0.5 border-b-2 border-transparent hover:border-[#E05338] cursor-pointer"
+            >
+              ABOUT
+            </button>
+            <button
+              onClick={() => scrollTo("architecture")}
+              className="hover:text-[#E05338] transition-colors pb-0.5 border-b-2 border-transparent hover:border-[#E05338] cursor-pointer"
+            >
+              ARCHITECTURE
+            </button>
+            <button
+              onClick={() => scrollTo("pipeline")}
+              className="hover:text-[#E05338] transition-colors pb-0.5 border-b-2 border-transparent hover:border-[#E05338] cursor-pointer"
+            >
+              HOW IT WORKS
+            </button>
+            <button
+              onClick={() => scrollTo("comparison")}
+              className="hover:text-[#E05338] transition-colors pb-0.5 border-b-2 border-transparent hover:border-[#E05338] cursor-pointer"
+            >
+              BENCHMARKS
+            </button>
+          </nav>
+
+          {/* Box 3: Clean Live Status Indicator (NO BUTTONS) */}
+          <div className="md:col-span-3 p-4 sm:p-5 flex items-center justify-center md:justify-end">
+            <div className="flex items-center space-x-2 px-3 py-1.5 rounded-full bg-[#FAF0E4] border-[1.5px] border-[#1C1917] font-mono text-[11px] font-bold text-[#1C1917] retro-shadow-sm select-none">
+              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+              <span className="hidden xl:inline">LIVE //</span>
+              <span>FEDAVG ACTIVE</span>
             </div>
-            <div className="p-4 rounded-xl bg-slate-900/80 border border-slate-800">
-              <div className="text-slate-400">Accuracy Gain</div>
-              <div className="text-emerald-400 font-bold text-sm mt-1">
-                +{roundResult.accuracy_delta ? (roundResult.accuracy_delta * 100).toFixed(2) : "0"}%
+          </div>
+        </header>
+
+        {/* ========================================================================= */}
+        {/* HERO SECTION (Exact grid structure matching the user's reference image) */}
+        {/* ========================================================================= */}
+        <section className="grid grid-cols-1 lg:grid-cols-12 min-h-[580px] bg-[#FAF7F2]">
+
+          {/* ------------------------------------------------------------- */}
+          {/* Cell 1: Main Left Hero (Headline, Copy, Metric, Retro Button) */}
+          {/* ------------------------------------------------------------- */}
+          <div className="lg:col-span-7 p-6 sm:p-10 lg:p-14 relative flex flex-col justify-between overflow-hidden border-b-[1.5px] lg:border-b-0 lg:border-r-[1.5px] border-[#1C1917]">
+
+            {/* Retro Vector Decor: Rotating Terracotta 12-point starburst */}
+            <div className="absolute top-8 right-8 sm:top-12 sm:right-14 w-14 h-14 sm:w-20 sm:h-20 pointer-events-none animate-spin-slow opacity-95">
+              <svg viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg" className="w-full h-full drop-shadow-sm">
+                <polygon
+                  points="50,0 59,32 90,15 76,45 100,50 76,55 90,85 59,68 50,100 41,68 10,85 24,55 0,50 24,45 10,15 41,32"
+                  fill="#E05338"
+                />
+              </svg>
+            </div>
+
+            {/* Retro Vector Decor: Playful Squiggly Spring Loop */}
+            <div className="absolute bottom-28 sm:bottom-24 left-1/2 -translate-x-1/2 w-40 sm:w-56 pointer-events-none opacity-80 animate-float">
+              <svg viewBox="0 0 200 40" fill="none" xmlns="http://www.w3.org/2000/svg" className="w-full">
+                <path
+                  d="M10 25 C 30 5, 45 40, 65 20 C 85 0, 100 45, 120 22 C 140 -2, 155 42, 175 20 C 185 10, 195 25, 200 22"
+                  stroke="#E05338"
+                  strokeWidth="2.5"
+                  strokeLinecap="round"
+                  fill="none"
+                />
+              </svg>
+            </div>
+
+            {/* Retro Vector Decor: Yellow 8-point sunburst */}
+            <div className="absolute bottom-8 right-16 sm:right-24 w-10 h-10 sm:w-14 sm:h-14 pointer-events-none animate-float-alt">
+              <svg viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg" className="w-full h-full">
+                <polygon
+                  points="50,5 62,35 95,50 62,65 50,95 38,65 5,50 38,35"
+                  fill="#E5A638"
+                />
+              </svg>
+            </div>
+
+            {/* Top Content */}
+            <div className="space-y-6 relative z-10">
+              {/* Featured Architecture kicker */}
+              <div className="inline-flex items-center space-x-2">
+                <span className="w-2.5 h-2.5 rounded-full bg-[#E05338]"></span>
+                <span className="font-mono text-xs uppercase tracking-widest font-extrabold text-[#E05338]">
+                  FEATURED ARCHITECTURE • FEDERATED & zkML
+                </span>
               </div>
+
+              {/* Massive Bold Headline */}
+              <h1 className="font-display font-black text-4xl sm:text-6xl lg:text-7xl uppercase tracking-tighter text-[#1C1917] leading-[0.95] max-w-xl">
+                FedZero<br />
+                Network
+              </h1>
+
+              {/* Subheading */}
+              <p className="text-sm sm:text-base text-[#1C1917]/80 max-w-lg font-sans font-medium leading-relaxed">
+                Collaborative machine-learning training across edge devices without sharing private datasets. Computations are verified by zero-knowledge proofs on Arbitrum and incentivized on Solana.
+              </p>
             </div>
-            <div className="p-4 rounded-xl bg-slate-900/80 border border-slate-800">
-              <div className="text-slate-400">Arbitrum Lineage Tx</div>
-              <div className="text-indigo-300 truncate mt-1 font-bold">{roundResult.arbitrum_round_tx}</div>
-            </div>
-            <div className="p-4 rounded-xl bg-slate-900/80 border border-slate-800">
-              <div className="text-slate-400">ZK Proofs Verified</div>
-              <div className="text-purple-300 font-bold text-sm mt-1">{roundResult.proofs_verified} Nodes Verified</div>
+
+            {/* Bottom Content: Price/Metric tag + Reference Image Button */}
+            <div className="mt-12 sm:mt-16 space-y-7 relative z-10">
+
+              {/* Highlight Metric styled like $999.99 in the image */}
+              <div className="space-y-1">
+                <div className="font-display font-black text-3xl sm:text-4xl text-[#1C1917] tracking-tight flex items-baseline space-x-3">
+                  <span>0.00 BYTES</span>
+                  <span className="text-xs font-mono font-bold uppercase tracking-wider text-[#E05338] bg-[#E05338]/10 px-2 py-0.5 rounded-md border border-[#E05338]/30">
+                    Shielded Edge
+                  </span>
+                </div>
+                <div className="font-mono text-xs text-[#1C1917]/70 font-semibold tracking-wide uppercase">
+                  Raw Data Leaked • 100% Client-Side Privacy Guaranteed
+                </div>
+              </div>
+
+              {/* The Single Main Action Button */}
+              <div className="pt-2">
+                <Link
+                  href="/dashboard"
+                  className="group inline-flex items-stretch border-[1.5px] border-[#1C1917] bg-[#FAF7F2] rounded-md overflow-hidden font-display font-extrabold text-xs tracking-wider uppercase text-[#1C1917] hover:bg-[#1C1917] hover:text-[#FAF7F2] transition-all hover:translate-x-[-2px] hover:translate-y-[-2px] hover:shadow-[4px_4px_0px_#E05338]"
+                >
+                  <span className="px-6 py-3.5 flex items-center space-x-2 border-r-[1.5px] border-[#1C1917]">
+                    <span>ENTER DASHBOARD</span>
+                  </span>
+                  <span className="px-3.5 flex items-center justify-center bg-[#FAF0E4] group-hover:bg-[#E05338] group-hover:text-white transition-colors">
+                    <ArrowDownRight className="w-4 h-4 transition-transform group-hover:scale-125" />
+                  </span>
+                </Link>
+              </div>
             </div>
           </div>
 
-          {/* Multi-Device Live Logs Stream */}
-          {roundResult.logs && roundResult.logs.length > 0 && (
-            <div className="space-y-2 pt-2 border-t border-slate-800/80">
-              <div className="text-xs font-mono font-bold text-cyan-400 flex items-center space-x-2">
-                <span>Multi-Device Execution & Verification Logs:</span>
+          {/* ------------------------------------------------------------- */}
+          {/* Cell 2: Right Protocol & Multi-Chain Architecture Console      */}
+          {/* (Warm Cream Editorial Theme matching the entire website)       */}
+          {/* ------------------------------------------------------------- */}
+          <div className="lg:col-span-5 p-6 sm:p-8 lg:p-10 flex flex-col justify-between bg-[#FAF0E4] border-t-[1.5px] lg:border-t-0 border-[#1C1917] space-y-6">
+
+            {/* Top Console Header */}
+            <div className="flex items-center justify-between border-b-[1.5px] border-[#1C1917] pb-4">
+              <div className="flex items-center space-x-2">
+                <span className="w-2.5 h-2.5 rounded-full bg-[#E05338] animate-ping"></span>
+                <span className="font-mono text-xs font-black uppercase tracking-wider text-[#1C1917]">
+                  PROTOCOL RUNTIME // LIVE MATRIX
+                </span>
               </div>
-              <div className="bg-[#050811] border border-slate-900 rounded-2xl p-4 font-mono text-[11px] text-slate-300 max-h-52 overflow-y-auto space-y-1.5 shadow-inner">
-                {roundResult.logs.map((log: string, idx: number) => {
-                  let color = "text-slate-300";
-                  if (log.includes("[Coordinator]")) color = "text-cyan-400 font-bold";
-                  else if (log.includes("[Arbitrum]")) color = "text-indigo-300 font-bold";
-                  else if (log.includes("[Solana]")) color = "text-pink-400 font-bold";
-                  else if (log.includes("[zkML Prover]")) color = "text-purple-300 font-bold";
-                  else if (log.includes("✅")) color = "text-emerald-300";
-                  return (
-                    <div key={idx} className={`${color} leading-relaxed flex items-start space-x-2`}>
-                      <span className="text-slate-600 select-none">&gt;</span>
-                      <span>{log}</span>
+              <span className="px-2.5 py-1 rounded-md bg-[#FAF7F2] border-[1.5px] border-[#1C1917] font-mono text-[10px] font-bold text-[#E05338] retro-shadow-sm">
+                3 NODES ONLINE
+              </span>
+            </div>
+
+            {/* Chain Selector Tabs (Arbitrum, Solana, Zcash) */}
+            <div className="space-y-3">
+              <div className="text-[11px] font-mono font-bold uppercase tracking-widest text-[#1C1917]/70">
+                Select Multi-Chain Layer:
+              </div>
+
+              <div className="grid grid-cols-3 gap-2 font-display text-xs font-bold uppercase">
+                <button
+                  onClick={() => setSelectedChain("arb")}
+                  className={`p-3 rounded-xl border-[1.5px] border-[#1C1917] flex flex-col items-center justify-center transition-all ${selectedChain === "arb"
+                      ? "bg-[#1C1917] text-[#FAF7F2] shadow-[2px_2px_0px_#E05338] scale-102"
+                      : "bg-[#FAF7F2] text-[#1C1917] hover:bg-[#FAF0E4]"
+                    }`}
+                >
+                  <span className="text-xs">ARBITRUM</span>
+                  <span className="text-[9px] font-mono opacity-80">ZK Verifier</span>
+                </button>
+
+                <button
+                  onClick={() => setSelectedChain("sol")}
+                  className={`p-3 rounded-xl border-[1.5px] border-[#1C1917] flex flex-col items-center justify-center transition-all ${selectedChain === "sol"
+                      ? "bg-[#1C1917] text-[#FAF7F2] shadow-[2px_2px_0px_#E05338] scale-102"
+                      : "bg-[#FAF7F2] text-[#1C1917] hover:bg-[#FAF0E4]"
+                    }`}
+                >
+                  <span className="text-xs">SOLANA</span>
+                  <span className="text-[9px] font-mono opacity-80">Rewards</span>
+                </button>
+
+                <button
+                  onClick={() => setSelectedChain("zec")}
+                  className={`p-3 rounded-xl border-[1.5px] border-[#1C1917] flex flex-col items-center justify-center transition-all ${selectedChain === "zec"
+                      ? "bg-[#1C1917] text-[#FAF7F2] shadow-[2px_2px_0px_#E05338] scale-102"
+                      : "bg-[#FAF7F2] text-[#1C1917] hover:bg-[#FAF0E4]"
+                    }`}
+                >
+                  <span className="text-xs">ZCASH</span>
+                  <span className="text-[9px] font-mono opacity-80">Shielded</span>
+                </button>
+              </div>
+
+              {/* Dynamic Chain Detail Card */}
+              <div className="p-4 sm:p-5 rounded-xl border-[1.5px] border-[#1C1917] bg-[#FAF7F2] space-y-3 retro-shadow-sm font-mono text-xs">
+                {selectedChain === "arb" && (
+                  <>
+                    <div className="flex items-center justify-between border-b border-[#1C1917]/20 pb-2">
+                      <span className="font-bold text-[#E05338]">Arbitrum Layer 2 (EVM Rollup)</span>
+                      <span className="text-[10px] bg-emerald-500/10 text-emerald-700 px-2 py-0.5 rounded border border-emerald-500/30">
+                        Operational
+                      </span>
                     </div>
-                  );
-                })}
+                    <div className="space-y-1.5 text-[11px] text-[#1C1917]/85">
+                      <div className="flex justify-between">
+                        <span className="text-[#1C1917]/60">Verifier Contract:</span>
+                        <span className="font-bold text-[#1C1917]">ZKVerifier.sol (0x5FbD...aa3)</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-[#1C1917]/60">Model Lineage:</span>
+                        <span className="font-bold text-[#1C1917]">ModelRegistry.sol (IPFS CIDs)</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-[#1C1917]/60">Pairing Gas:</span>
+                        <span className="font-bold text-[#E05338]">O(1) Constant Gas</span>
+                      </div>
+                    </div>
+                  </>
+                )}
+
+                {selectedChain === "sol" && (
+                  <>
+                    <div className="flex items-center justify-between border-b border-[#1C1917]/20 pb-2">
+                      <span className="font-bold text-[#E05338]">Solana High-Throughput Engine</span>
+                      <span className="text-[10px] bg-emerald-500/10 text-emerald-700 px-2 py-0.5 rounded border border-emerald-500/30">
+                        Sub-second
+                      </span>
+                    </div>
+                    <div className="space-y-1.5 text-[11px] text-[#1C1917]/85">
+                      <div className="flex justify-between">
+                        <span className="text-[#1C1917]/60">Program PDA:</span>
+                        <span className="font-bold text-[#1C1917]">Compute1...1111</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-[#1C1917]/60">Reward Formula:</span>
+                        <span className="font-bold text-[#1C1917]">Quality × Validity × ComputeTier</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-[#1C1917]/60">Anti-Sybil:</span>
+                        <span className="font-bold text-emerald-700">Rate-Limited Anchor PDA</span>
+                      </div>
+                    </div>
+                  </>
+                )}
+
+                {selectedChain === "zec" && (
+                  <>
+                    <div className="flex items-center justify-between border-b border-[#1C1917]/20 pb-2">
+                      <span className="font-bold text-[#E05338]">Zcash Cryptographic Pavilion</span>
+                      <span className="text-[10px] bg-purple-500/10 text-purple-700 px-2 py-0.5 rounded border border-purple-500/30">
+                        Shielded Edge
+                      </span>
+                    </div>
+                    <div className="space-y-1.5 text-[11px] text-[#1C1917]/85">
+                      <div className="flex justify-between">
+                        <span className="text-[#1C1917]/60">Privacy Standard:</span>
+                        <span className="font-bold text-[#1C1917]">Shielded Confidential Weights</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-[#1C1917]/60">Raw Data Disclosed:</span>
+                        <span className="font-bold text-emerald-700">0.00 Bytes (100% Private)</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-[#1C1917]/60">ZK Paradigm:</span>
+                        <span className="font-bold text-[#1C1917]">Halo2 / BN254 Scalar Field</span>
+                      </div>
+                    </div>
+                  </>
+                )}
               </div>
             </div>
-          )}
+
+            {/* Live Edge Nodes Status Matrix */}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between text-[11px] font-mono font-bold uppercase tracking-wider text-[#1C1917]/70">
+                <span>Active Edge Hardware:</span>
+                <span className="text-emerald-700 font-bold flex items-center space-x-1">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                  <span>100% Zero-Leakage</span>
+                </span>
+              </div>
+
+              <div className="grid grid-cols-3 gap-2 font-mono text-[10px]">
+                <div className="p-2.5 rounded-lg border-[1.5px] border-[#1C1917] bg-[#FAF7F2] space-y-0.5">
+                  <div className="font-bold text-[#E05338] truncate">Node-01 // RTX 4090</div>
+                  <div className="text-[#1C1917]/70">FL Epochs: 3</div>
+                  <div className="text-emerald-700 font-semibold">Proof: Valid ✓</div>
+                </div>
+
+                <div className="p-2.5 rounded-lg border-[1.5px] border-[#1C1917] bg-[#FAF7F2] space-y-0.5">
+                  <div className="font-bold text-[#E5A638] truncate">Node-02 // M3 Max</div>
+                  <div className="text-[#1C1917]/70">DP-SGD Local</div>
+                  <div className="text-emerald-700 font-semibold">Halo2: BN254 ✓</div>
+                </div>
+
+                <div className="p-2.5 rounded-lg border-[1.5px] border-[#1C1917] bg-[#FAF7F2] space-y-0.5">
+                  <div className="font-bold text-[#1C1917] truncate">Node-03 // A100</div>
+                  <div className="text-[#1C1917]/70">Cluster Tensor</div>
+                  <div className="text-emerald-700 font-semibold">Byzantine: OK ✓</div>
+                </div>
+              </div>
+            </div>
+
+            {/* Interactive Testnet Round Simulator (Replaces static text & duplicate button) */}
+            <div className="p-4 rounded-xl border-[1.5px] border-[#1C1917] bg-[#FAF7F2] space-y-3 retro-shadow-sm font-mono">
+              <div className="flex items-center justify-between text-xs border-b border-[#1C1917]/15 pb-2">
+                <span className="font-bold uppercase tracking-wider text-[#1C1917] flex items-center space-x-1.5">
+                  <span className={`w-2 h-2 rounded-full ${simulating ? "bg-[#E05338] animate-ping" : "bg-emerald-500"}`}></span>
+                  <span>Interactive Testnet Engine</span>
+                </span>
+                <span className="font-bold text-[#E05338] text-[11px]">
+                  Round #{simRound}
+                </span>
+              </div>
+
+              {/* Live Status Output Banner */}
+              <div className="p-2.5 rounded-lg bg-[#FAF0E4] border border-[#1C1917]/30 text-xs text-[#1C1917] flex items-center justify-between">
+                <span className="truncate font-semibold">{simStep}</span>
+                <span className="text-[11px] font-bold text-[#E05338] ml-2 shrink-0">
+                  {simAccuracy}% Acc
+                </span>
+              </div>
+
+              {/* Interactive Trigger Button */}
+              <button
+                onClick={handleSimulateRound}
+                disabled={simulating}
+                className="w-full py-3 px-4 rounded-xl border-[1.5px] border-[#1C1917] bg-[#1C1917] text-[#FAF7F2] hover:bg-[#E05338] hover:text-white font-display font-extrabold text-xs uppercase tracking-wider flex items-center justify-center space-x-2 transition-all hover:translate-x-[-2px] hover:translate-y-[-2px] hover:shadow-[3px_3px_0px_#E05338] active:translate-x-[0px] active:translate-y-[0px] disabled:opacity-60 cursor-pointer"
+              >
+                <Zap className={`w-4 h-4 text-[#E5A638] ${simulating ? "animate-spin" : ""}`} />
+                <span>{simulating ? "EXECUTING FEDAVG & ZK PROOFS..." : "TEST RUN FEDAVG ROUND ⚡"}</span>
+              </button>
+            </div>
+
+          </div>
+
+        </section>
+
+        {/* ========================================================================= */}
+        {/* TICKER / MARQUEE RIBBON */}
+        {/* ========================================================================= */}
+        <div className="border-y-[1.5px] border-[#1C1917] bg-[#FAF0E4] py-3 overflow-hidden select-none">
+          <div className="flex items-center space-x-8 font-mono font-bold text-xs uppercase tracking-widest text-[#1C1917] whitespace-nowrap animate-pulse">
+            <span className="flex items-center space-x-2">
+              <span className="text-[#E05338]">★</span>
+              <span>ZERO DATA LEAKAGE</span>
+            </span>
+            <span className="flex items-center space-x-2">
+              <span className="text-[#E05338]">★</span>
+              <span>HALO2 ZERO-KNOWLEDGE PROOFS</span>
+            </span>
+            <span className="flex items-center space-x-2">
+              <span className="text-[#E05338]">★</span>
+              <span>ARBITRUM L2 LINEAGE REGISTRY</span>
+            </span>
+            <span className="flex items-center space-x-2">
+              <span className="text-[#E05338]">★</span>
+              <span>SOLANA DYNAMIC INCENTIVE ENGINE</span>
+            </span>
+            <span className="flex items-center space-x-2">
+              <span className="text-[#E05338]">★</span>
+              <span>BYZANTINE POISONING DEFENSE</span>
+            </span>
+            <span className="flex items-center space-x-2">
+              <span className="text-[#E05338]">★</span>
+              <span>100% PRIVATE EDGE COMPUTE</span>
+            </span>
+          </div>
         </div>
-      )}
 
-      {/* Bottom Quick Navigation Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <Link href="/training" className="p-6 rounded-3xl glass-panel hover:border-cyan-500/40 transition-all group">
-          <div className="flex items-center justify-between">
-            <h4 className="text-base font-bold text-white group-hover:text-cyan-400 transition-colors">
-              Training Control Center
-            </h4>
-            <ArrowUpRight className="w-5 h-5 text-slate-400 group-hover:text-cyan-400 transition-colors" />
-          </div>
-          <p className="text-xs text-slate-400 mt-2 leading-relaxed">
-            Manage multi-device nodes, execute federated rounds, and view live edge execution logs.
-          </p>
-        </Link>
+        {/* ========================================================================= */}
+        {/* ABOUT SECTION (Rich Project Description as requested by User) */}
+        {/* ========================================================================= */}
+        <section id="about" className="p-6 sm:p-10 lg:p-14 bg-[#FAF7F2] border-b-[1.5px] border-[#1C1917] space-y-12">
 
-        <Link href="/proofs" className="p-6 rounded-3xl glass-panel hover:border-purple-500/40 transition-all group">
-          <div className="flex items-center justify-between">
-            <h4 className="text-base font-bold text-white group-hover:text-purple-400 transition-colors">
-              Zero-Knowledge Proofs
-            </h4>
-            <ArrowUpRight className="w-5 h-5 text-slate-400 group-hover:text-purple-400 transition-colors" />
+          {/* Section Header Bar */}
+          <div className="grid grid-cols-1 md:grid-cols-12 border-[1.5px] border-[#1C1917] bg-[#F7F2EA] rounded-xl overflow-hidden divide-y md:divide-y-0 md:divide-x-[1.5px] divide-[#1C1917]">
+            <div className="md:col-span-3 p-4 flex items-center space-x-2 font-mono text-xs font-bold text-[#E05338]">
+              <span className="w-2 h-2 rounded-full bg-[#E05338]"></span>
+              <span>SECTION 01 // OVERVIEW</span>
+            </div>
+            <div className="md:col-span-6 p-4 text-center font-display font-extrabold text-sm uppercase tracking-wider text-[#1C1917]">
+              ABOUT THE FEDZERO PROTOCOL
+            </div>
+            <div className="md:col-span-3 p-4 flex items-center justify-end font-mono text-xs font-semibold text-[#1C1917]/70">
+              SPECIFICATION v2.4
+            </div>
           </div>
-          <p className="text-xs text-slate-400 mt-2 leading-relaxed">
-            Examine ONNX computation graph constraints, witness quantization, and BN254 scalar field public input commitments.
-          </p>
-        </Link>
 
-        <Link href="/passport" className="p-6 rounded-3xl glass-panel hover:border-amber-500/40 transition-all group">
-          <div className="flex items-center justify-between">
-            <h4 className="text-base font-bold text-white group-hover:text-amber-400 transition-colors">
-              AI Contributor Passport
-            </h4>
-            <ArrowUpRight className="w-5 h-5 text-slate-400 group-hover:text-amber-400 transition-colors" />
+          {/* Project Mission & Core Dilemma */}
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+            <div className="lg:col-span-5 space-y-4">
+              <span className="px-3 py-1 rounded-full text-xs font-mono font-bold bg-[#E05338]/10 text-[#E05338] border border-[#E05338]/30 inline-block">
+                The Privacy Dilemma
+              </span>
+              <h2 className="font-display font-black text-3xl sm:text-4xl text-[#1C1917] uppercase tracking-tight leading-tight">
+                AI MUST LEARN FROM DATA WITHOUT STEALING IT.
+              </h2>
+              <p className="text-sm text-[#1C1917]/80 leading-relaxed font-sans">
+                Traditional AI requires organizations and individuals to surrender raw proprietary datasets into centralized cloud warehouses (OpenAI, AWS, Google Cloud). This creates dangerous single points of failure, copyright litigation, and catastrophic medical and financial privacy leaks.
+              </p>
+            </div>
+
+            <div className="lg:col-span-7 bg-[#FAF0E4] border-[1.5px] border-[#1C1917] rounded-2xl p-6 sm:p-8 space-y-4 retro-shadow">
+              <h3 className="font-display font-extrabold text-xl text-[#1C1917] uppercase flex items-center space-x-2">
+                <Sparkles className="w-5 h-5 text-[#E05338]" />
+                <span>The Solution: Bring Code to Data, Not Data to Code</span>
+              </h3>
+              <p className="text-sm text-[#1C1917]/85 leading-relaxed">
+                The <strong>FedZero Network</strong> unites <strong>Federated Learning (FL)</strong> with <strong>Zero-Knowledge Cryptography (zkML)</strong> and a <strong>Tripartite Multi-Chain Architecture</strong>. Devices independently compute local parameter weight improvements without ever transferring private data. Zero-Knowledge proofs verify computation integrity on-chain, eliminating the need to blindly trust edge participants.
+              </p>
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2 font-mono text-xs">
+                <div className="p-3 bg-[#FAF7F2] rounded-xl border border-[#1C1917]/30">
+                  <div className="text-[#E05338] font-bold text-lg">0 KB</div>
+                  <div className="text-[#1C1917]/70 text-[11px]">Raw Data Disclosed</div>
+                </div>
+                <div className="p-3 bg-[#FAF7F2] rounded-xl border border-[#1C1917]/30">
+                  <div className="text-[#1C1917] font-bold text-lg">O(1) Gas</div>
+                  <div className="text-[#1C1917]/70 text-[11px]">Succinct Pairing Checks</div>
+                </div>
+                <div className="p-3 bg-[#FAF7F2] rounded-xl border border-[#1C1917]/30">
+                  <div className="text-[#E5A638] font-bold text-lg">&lt; 1.2s</div>
+                  <div className="text-[#1C1917]/70 text-[11px]">Solana Micro-Payouts</div>
+                </div>
+              </div>
+            </div>
           </div>
-          <p className="text-xs text-slate-400 mt-2 leading-relaxed">
-            Review decentralized Soulbound reputation tokens, contributor tiers (Platinum, Gold, Silver), and achievements.
-          </p>
-        </Link>
+
+          {/* 3 Pillars Grid matching the retro editorial aesthetic */}
+          <div id="architecture" className="grid grid-cols-1 md:grid-cols-3 gap-6 pt-4 scroll-mt-20">
+
+            {/* Pillar 1 */}
+            <div className="border-[1.5px] border-[#1C1917] rounded-2xl p-6 bg-[#FAF7F2] retro-btn space-y-4">
+              <div className="w-12 h-12 rounded-xl bg-[#E05338]/15 border-[1.5px] border-[#1C1917] flex items-center justify-center text-[#E05338]">
+                <Cpu className="w-6 h-6" />
+              </div>
+              <div className="font-mono text-xs font-bold text-[#E05338] tracking-widest uppercase">
+                01 // EDGE COMPUTATION
+              </div>
+              <h3 className="font-display font-bold text-xl text-[#1C1917]">
+                Federated Learning (FedAvg)
+              </h3>
+              <p className="text-xs text-[#1C1917]/80 leading-relaxed font-sans">
+                Participants download the latest global model tensor, perform local epochs on edge datasets, and return mathematical delta weights (ΔW). Distance-based outlier rejection and L2 norm clipping actively defend against adversarial poisoning.
+              </p>
+              <ul className="text-xs font-mono space-y-1.5 text-[#1C1917]/75 pt-2 border-t border-[#1C1917]/20">
+                <li className="flex items-center space-x-1.5">
+                  <span className="text-[#E05338]">✔</span>
+                  <span>Cross-device & Cross-silo FL</span>
+                </li>
+                <li className="flex items-center space-x-1.5">
+                  <span className="text-[#E05338]">✔</span>
+                  <span>Byzantine outlier filtering</span>
+                </li>
+              </ul>
+            </div>
+
+            {/* Pillar 2 */}
+            <div className="border-[1.5px] border-[#1C1917] rounded-2xl p-6 bg-[#FAF7F2] retro-btn space-y-4">
+              <div className="w-12 h-12 rounded-xl bg-[#E5A638]/20 border-[1.5px] border-[#1C1917] flex items-center justify-center text-[#E5A638]">
+                <ShieldCheck className="w-6 h-6 text-[#1C1917]" />
+              </div>
+              <div className="font-mono text-xs font-bold text-[#E5A638] tracking-widest uppercase">
+                02 // CRYPTOGRAPHIC INTEGRITY
+              </div>
+              <h3 className="font-display font-bold text-xl text-[#1C1917]">
+                Zero-Knowledge Proofs (zkML)
+              </h3>
+              <p className="text-xs text-[#1C1917]/80 leading-relaxed font-sans">
+                Eliminates the "lazy node" problem. Every edge participant synthesizes an EZKL / Halo2 SNARK proof verifying that the claimed forward and backward training steps were honestly calculated without falsified weights.
+              </p>
+              <ul className="text-xs font-mono space-y-1.5 text-[#1C1917]/75 pt-2 border-t border-[#1C1917]/20">
+                <li className="flex items-center space-x-1.5">
+                  <span className="text-[#E5A638]">✔</span>
+                  <span>Halo2 KZG & BN254 circuits</span>
+                </li>
+                <li className="flex items-center space-x-1.5">
+                  <span className="text-[#E5A638]">✔</span>
+                  <span>Quantization constraint checking</span>
+                </li>
+              </ul>
+            </div>
+
+            {/* Pillar 3 */}
+            <div className="border-[1.5px] border-[#1C1917] rounded-2xl p-6 bg-[#FAF7F2] retro-btn space-y-4">
+              <div className="w-12 h-12 rounded-xl bg-[#1C1917] text-[#FAF7F2] border-[1.5px] border-[#1C1917] flex items-center justify-center">
+                <Database className="w-6 h-6" />
+              </div>
+              <div className="font-mono text-xs font-bold text-[#1C1917] tracking-widest uppercase">
+                03 // CONSENSUS & SETTLEMENT
+              </div>
+              <h3 className="font-display font-bold text-xl text-[#1C1917]">
+                Tripartite Multi-Chain Layer
+              </h3>
+              <p className="text-xs text-[#1C1917]/80 leading-relaxed font-sans">
+                <strong>Arbitrum</strong> verifies Groth16/KZG pairings and tracks model lineage CIDs. <strong>Solana</strong> delivers high-throughput token rewards. <strong>Zcash</strong> serves as the zero-knowledge privacy benchmark.
+              </p>
+              <ul className="text-xs font-mono space-y-1.5 text-[#1C1917]/75 pt-2 border-t border-[#1C1917]/20">
+                <li className="flex items-center space-x-1.5">
+                  <span className="text-[#E05338]">✔</span>
+                  <span>ZKVerifier.sol & AIPassport.sol</span>
+                </li>
+                <li className="flex items-center space-x-1.5">
+                  <span className="text-[#E05338]">✔</span>
+                  <span>Dynamic reward scoring engine</span>
+                </li>
+              </ul>
+            </div>
+
+          </div>
+
+        </section>
+
+        {/* ========================================================================= */}
+        {/* INTERACTIVE WORKFLOW PIPELINE (How it works with interactive step tabs) */}
+        {/* ========================================================================= */}
+        <section id="pipeline" className="p-6 sm:p-10 lg:p-14 bg-[#FAF0E4] border-b-[1.5px] border-[#1C1917] space-y-8">
+
+          <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
+            <div>
+              <div className="font-mono text-xs font-extrabold text-[#E05338] uppercase tracking-widest">
+                STEP-BY-STEP EXECUTION
+              </div>
+              <h2 className="font-display font-black text-3xl sm:text-4xl text-[#1C1917] uppercase tracking-tight mt-1">
+                HOW A FEDERATED TRAINING ROUND OPERATES
+              </h2>
+            </div>
+            <div className="font-mono text-xs text-[#1C1917]/70">
+              Click any step to inspect mathematical mechanics
+            </div>
+          </div>
+
+          {/* Stepper Tabs Bar */}
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+            {architectureSteps.map((s, idx) => (
+              <button
+                key={idx}
+                onClick={() => setActiveStep(idx)}
+                className={`p-4 rounded-xl border-[1.5px] text-left transition-all ${activeStep === idx
+                    ? "bg-[#FAF7F2] border-[#1C1917] retro-shadow-sm font-bold"
+                    : "bg-[#F7F2EA] border-[#1C1917]/40 hover:border-[#1C1917] text-[#1C1917]/80"
+                  }`}
+              >
+                <div className="flex items-center justify-between text-xs font-mono mb-2">
+                  <span className={`px-2 py-0.5 rounded text-[11px] font-bold ${activeStep === idx ? "bg-[#E05338] text-white" : "bg-[#1C1917]/10 text-[#1C1917]"
+                    }`}>
+                    STEP {s.step}
+                  </span>
+                  <span className="text-[10px] text-[#1C1917]/60 uppercase">{s.tag}</span>
+                </div>
+                <div className="font-display text-sm font-bold text-[#1C1917] truncate">
+                  {s.title}
+                </div>
+              </button>
+            ))}
+          </div>
+
+          {/* Active Step Showcase Card */}
+          <div className="bg-[#FAF7F2] border-[1.5px] border-[#1C1917] rounded-2xl p-6 sm:p-8 retro-shadow grid grid-cols-1 lg:grid-cols-12 gap-8 items-center">
+            <div className="lg:col-span-7 space-y-4">
+              <div className="inline-flex items-center space-x-2 text-xs font-mono font-bold text-[#E05338] uppercase">
+                <span className="w-2 h-2 rounded-full bg-[#E05338]"></span>
+                <span>Active Phase: Step {architectureSteps[activeStep].step}</span>
+              </div>
+              <h3 className="font-display font-black text-2xl text-[#1C1917]">
+                {architectureSteps[activeStep].title}
+              </h3>
+              <p className="text-sm text-[#1C1917]/85 leading-relaxed font-sans">
+                {architectureSteps[activeStep].desc}
+              </p>
+
+              <div className="space-y-2 pt-2">
+                <div className="text-xs font-mono font-bold text-[#1C1917] uppercase tracking-wider">
+                  Guaranteed Cryptographic Properties:
+                </div>
+                {architectureSteps[activeStep].details.map((detail, dIdx) => (
+                  <div key={dIdx} className="flex items-start space-x-2 text-xs font-mono text-[#1C1917]/80">
+                    <span className="text-[#E05338] font-bold">▶</span>
+                    <span>{detail}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Mathematical Formula Card - Styled in Website Warm Theme */}
+            <div className="lg:col-span-5 bg-[#FAF0E4] text-[#1C1917] rounded-2xl p-5 sm:p-6 border-[1.5px] border-[#1C1917] font-mono text-xs space-y-4 retro-shadow-sm">
+              <div className="flex items-center justify-between border-b-[1.5px] border-[#1C1917]/20 pb-2.5 text-[11px]">
+                <span className="font-bold uppercase tracking-wider text-[#1C1917] flex items-center space-x-1.5">
+                  <span className="w-2 h-2 rounded-full bg-[#E05338]"></span>
+                  <span>MATHEMATICAL FORMULA</span>
+                </span>
+                <span className="px-2 py-0.5 rounded-md bg-emerald-500/15 text-emerald-800 border border-emerald-500/30 font-bold text-[10px] uppercase">
+                  VERIFIED ✓
+                </span>
+              </div>
+
+              {/* The Formula Box */}
+              <div className="p-4 bg-[#FAF7F2] rounded-xl border-[1.5px] border-[#1C1917] text-[#E05338] font-mono text-xs sm:text-sm font-bold overflow-x-auto shadow-inner">
+                <code>{architectureSteps[activeStep].formula}</code>
+              </div>
+
+              <div className="text-[11px] text-[#1C1917]/80 leading-relaxed font-mono bg-[#FAF7F2]/60 p-3 rounded-lg border border-[#1C1917]/15">
+                Executed inside client hardware enclaves and validated via bilinear pairing checks on Arbitrum layer 2.
+              </div>
+            </div>
+          </div>
+
+        </section>
+
+        {/* ========================================================================= */}
+        {/* COMPARISON BENCHMARKS (Traditional AI vs Verifiable AI Network) */}
+        {/* ========================================================================= */}
+        <section id="comparison" className="p-6 sm:p-10 lg:p-14 bg-[#FAF7F2] border-b-[1.5px] border-[#1C1917] space-y-8">
+
+          <div className="text-center max-w-2xl mx-auto space-y-2">
+            <span className="font-mono text-xs font-bold text-[#E05338] uppercase tracking-widest">
+              PARADIGM SHIFT
+            </span>
+            <h2 className="font-display font-black text-3xl sm:text-4xl text-[#1C1917] uppercase tracking-tight">
+              TRADITIONAL AI VS. VERIFIABLE NETWORK
+            </h2>
+            <p className="text-xs sm:text-sm text-[#1C1917]/70 font-sans">
+              How our zero-knowledge federated protocol changes the fundamental trust assumptions of machine learning.
+            </p>
+          </div>
+
+          {/* Table Container */}
+          <div className="border-[1.5px] border-[#1C1917] rounded-2xl overflow-hidden bg-[#FAF7F2] retro-shadow">
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs font-mono">
+                <thead>
+                  <tr className="bg-[#1C1917] text-[#FAF7F2] uppercase tracking-wider font-bold">
+                    <th className="p-4 border-r border-[#FAF7F2]/20">Evaluation Vector</th>
+                    <th className="p-4 border-r border-[#FAF7F2]/20 text-[#FAF7F2]/70">Traditional Centralized AI</th>
+                    <th className="p-4 text-[#E5A638]">FedZero Protocol (This Project)</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y-[1.5px] divide-[#1C1917]">
+                  <tr className="hover:bg-[#FAF0E4] transition-colors">
+                    <td className="p-4 font-bold text-[#1C1917] border-r-[1.5px] border-[#1C1917]">
+                      Raw Data Custody
+                    </td>
+                    <td className="p-4 text-[#1C1917]/70 border-r-[1.5px] border-[#1C1917]">
+                      Uploaded to corporate servers; vulnerable to breach.
+                    </td>
+                    <td className="p-4 font-bold text-[#E05338]">
+                      100% Client-Side; raw data never leaves device hardware.
+                    </td>
+                  </tr>
+
+                  <tr className="hover:bg-[#FAF0E4] transition-colors">
+                    <td className="p-4 font-bold text-[#1C1917] border-r-[1.5px] border-[#1C1917]">
+                      Computation Trust
+                    </td>
+                    <td className="p-4 text-[#1C1917]/70 border-r-[1.5px] border-[#1C1917]">
+                      "Trust us" cloud provider guarantees; no proof of honesty.
+                    </td>
+                    <td className="p-4 font-bold text-[#1C1917]">
+                      Halo2 zk-SNARK cryptographic validity proof (π).
+                    </td>
+                  </tr>
+
+                  <tr className="hover:bg-[#FAF0E4] transition-colors">
+                    <td className="p-4 font-bold text-[#1C1917] border-r-[1.5px] border-[#1C1917]">
+                      Model Version Lineage
+                    </td>
+                    <td className="p-4 text-[#1C1917]/70 border-r-[1.5px] border-[#1C1917]">
+                      Opaque internal release notes; easily modified or retracted.
+                    </td>
+                    <td className="p-4 font-bold text-[#1C1917]">
+                      Arbitrum Smart Contract (ModelRegistry.sol) with IPFS CIDs.
+                    </td>
+                  </tr>
+
+                  <tr className="hover:bg-[#FAF0E4] transition-colors">
+                    <td className="p-4 font-bold text-[#1C1917] border-r-[1.5px] border-[#1C1917]">
+                      Contributor Incentive
+                    </td>
+                    <td className="p-4 text-[#1C1917]/70 border-r-[1.5px] border-[#1C1917]">
+                      Big tech monopoly captures 100% of commercial value.
+                    </td>
+                    <td className="p-4 font-bold text-emerald-700">
+                      Automated Solana micro-rewards based on quality & compute.
+                    </td>
+                  </tr>
+
+                  <tr className="hover:bg-[#FAF0E4] transition-colors">
+                    <td className="p-4 font-bold text-[#1C1917] border-r-[1.5px] border-[#1C1917]">
+                      Reputation & Sybil Defense
+                    </td>
+                    <td className="p-4 text-[#1C1917]/70 border-r-[1.5px] border-[#1C1917]">
+                      Centralized ban-lists and closed API tokens.
+                    </td>
+                    <td className="p-4 font-bold text-[#1C1917]">
+                      Soulbound AIPassport.sol tokens & rate-limited PDAs.
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+        </section>
+
+        {/* ========================================================================= */}
+        {/* BIG CALL TO ACTION BANNER (Direct Gateway to Dashboard) */}
+        {/* ========================================================================= */}
+        <section className="p-8 sm:p-12 lg:p-16 bg-[#181A24] text-[#FAF5EE] relative overflow-hidden flex flex-col md:flex-row items-center justify-between gap-8">
+
+          {/* Ambient glow */}
+          <div className="absolute top-0 right-0 w-96 h-96 bg-[#E05338]/20 rounded-full blur-3xl pointer-events-none"></div>
+
+          <div className="space-y-3 relative z-10 max-w-2xl">
+            <div className="inline-flex items-center space-x-2 px-3 py-1 rounded-full bg-[#FAF5EE]/10 border border-[#FAF5EE]/20 text-[#E5A638] text-xs font-mono">
+              <Activity className="w-3.5 h-3.5 animate-pulse" />
+              <span>LIVE TESTNET ONLINE • 3 SIMULATED PARTICIPANTS</span>
+            </div>
+            <h2 className="font-display font-black text-3xl sm:text-5xl uppercase tracking-tight text-white leading-tight">
+              READY TO INTERACT WITH THE RUNNING NETWORK?
+            </h2>
+            <p className="text-sm text-[#FAF5EE]/75 font-sans leading-relaxed">
+              Launch the live telemetry dashboard. Trigger federated learning training rounds, inspect Halo2 zkML constraints, manage autoML datasets, and view automated Solana rewards in real time.
+            </p>
+          </div>
+
+          <div className="relative z-10 flex flex-col sm:flex-row items-center gap-4">
+            <Link
+              href="/dashboard"
+              className="px-8 py-4 rounded-xl bg-[#E05338] hover:bg-[#FAF5EE] text-white hover:text-[#1C1917] font-display font-black text-sm uppercase tracking-wider flex items-center space-x-2.5 border-[2px] border-[#1C1917] shadow-[4px_4px_0px_#FAF5EE] hover:shadow-[4px_4px_0px_#E05338] transition-all hover:scale-105 active:scale-95"
+            >
+              <span>ENTER DASHBOARD NOW</span>
+              <ArrowUpRight className="w-5 h-5" />
+            </Link>
+          </div>
+
+        </section>
+
+        {/* ========================================================================= */}
+        {/* FOOTER SECTION (Editorial Framed Grid Footer) */}
+        {/* ========================================================================= */}
+        <footer className="border-t-[1.5px] border-[#1C1917] bg-[#FAF7F2] p-6 sm:p-10 font-mono text-xs text-[#1C1917]">
+          <div className="grid grid-cols-1 md:grid-cols-12 gap-8 items-center justify-between">
+
+            <div className="md:col-span-5 space-y-2">
+              <div className="flex items-center space-x-2.5">
+                <div className="w-6 h-6 rounded-lg bg-[#E05338] flex items-center justify-center text-white font-bold text-xs border border-[#1C1917]">
+                  V
+                </div>
+                <span className="font-display font-extrabold text-sm uppercase tracking-tight">
+                  FEDZERO NETWORK
+                </span>
+              </div>
+              <p className="text-[11px] text-[#1C1917]/70 max-w-sm">
+                A research-grade decentralized machine learning framework powered by zero-knowledge proofs and multi-chain settlement.
+              </p>
+            </div>
+
+            <div className="md:col-span-4 flex flex-wrap gap-4 text-xs font-display font-bold uppercase">
+              <Link href="/dashboard" className="hover:text-[#E05338] transition-colors">
+                Dashboard
+              </Link>
+              <Link href="/training" className="hover:text-[#E05338] transition-colors">
+                Training Center
+              </Link>
+              <Link href="/proofs" className="hover:text-[#E05338] transition-colors">
+                ZK Proofs
+              </Link>
+              <Link href="/passport" className="hover:text-[#E05338] transition-colors">
+                AI Passport
+              </Link>
+            </div>
+
+            <div className="md:col-span-3 text-left md:text-right space-y-1 text-[11px] text-[#1C1917]/60">
+              <div>Network Block: #19,420,812</div>
+              <div>Cryptographic Status: Shielded Edge</div>
+              <div className="text-[10px] text-[#1C1917]/40">© 2026 FedZero Protocol Consortium. All rights reserved.</div>
+            </div>
+
+          </div>
+        </footer>
+
       </div>
     </div>
   );

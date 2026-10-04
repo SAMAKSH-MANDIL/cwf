@@ -128,6 +128,25 @@ def get_model_detail(model_id: str, db: Session = Depends(get_db)):
     }
 
 
+class UpdateArchitectureRequest(BaseModel):
+    hidden_layers: List[int]
+
+
+@app.get("/api/model/architecture")
+def get_model_architecture():
+    """Returns current neural network architecture and hidden layer specifications."""
+    return orchestrator.get_model_architecture()
+
+
+@app.post("/api/model/architecture")
+def update_model_architecture(payload: UpdateArchitectureRequest):
+    """Dynamically reconfigures neural network hidden layers and synchronizes edge nodes."""
+    try:
+        return orchestrator.update_model_architecture(payload.hidden_layers)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
 # -------------------------------------------------------------
 # Training & Rounds
 # -------------------------------------------------------------
@@ -203,14 +222,14 @@ def get_contributions(limit: int = 50, db: Session = Depends(get_db)):
             "round_id": c.round_id,
             "update_hash": c.update_hash,
             "proof_hash": c.proof_hash,
-            "delta_norm": round(c.delta_norm, 4),
-            "samples_count": c.samples_count,
-            "accuracy_gain": round(c.accuracy_gain * 100, 2),
-            "loss_reduction": round(c.loss_reduction, 4),
-            "verification_status": c.verification_status,
+            "delta_norm": round(c.delta_norm, 4) if c.delta_norm is not None else 0.0,
+            "samples_count": c.samples_count or 0,
+            "accuracy_gain": round((c.accuracy_gain or 0.0) * 100, 2),
+            "loss_reduction": round(c.loss_reduction or 0.0, 4),
+            "verification_status": c.verification_status or "VERIFIED",
             "arbitrum_tx_hash": c.arbitrum_tx_hash,
             "solana_tx_signature": c.solana_tx_signature,
-            "reward_tokens": c.reward_tokens,
+            "reward_tokens": c.reward_tokens or 0.0,
             "created_at": c.created_at,
         }
         for c in contribs

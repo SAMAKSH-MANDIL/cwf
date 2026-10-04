@@ -84,11 +84,19 @@ def get_federated_partitions() -> Dict[str, Dict[str, np.ndarray]]:
             ),
         },
         "node_gamma": {
-            "name": "Clinic Gamma (Community Health)",
-            "device_id": "0x90F79bf6EB2c4f870365E785982E1f101E93b906",
+            "name": "Clinic Gamma (Research Lab)",
+            "device_id": "0xE1294C668b828f7c9eF02559b36C67341De0923C",
             "samples": 180,
             "data": generate_synthetic_biomarkers(
                 n_samples=180, class_ratio=0.50, noise_level=0.15, bias_shift=0.0, seed=303
+            ),
+        },
+        "node_delta": {
+            "name": "Mobile Diagnostic Unit Delta",
+            "device_id": "0x98Fc44aB012C5E7290bC1864aDe7401c900D85Fb",
+            "samples": 120,
+            "data": generate_synthetic_biomarkers(
+                n_samples=120, class_ratio=0.55, noise_level=0.14, bias_shift=0.08, seed=404
             ),
         },
     }

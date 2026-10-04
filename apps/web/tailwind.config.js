@@ -16,9 +16,17 @@ module.exports = {
         accentEmerald: "#10b981",
         accentViolet: "#8b5cf6",
         accentAmber: "#f59e0b",
+        // Retro editorial palette from reference image
+        retroCream: "#FBF7F0",
+        retroCreamDark: "#F3EDE2",
+        retroInk: "#1C1917",
+        retroOrange: "#E05338",
+        retroYellow: "#E5A638",
+        retroDarkCard: "#181A24",
       },
       fontFamily: {
-        sans: ["Inter", "-apple-system", "BlinkMacSystemFont", "Segoe UI", "Roboto", "sans-serif"],
+        sans: ["Plus Jakarta Sans", "Inter", "-apple-system", "BlinkMacSystemFont", "Segoe UI", "sans-serif"],
+        display: ["Space Grotesk", "sans-serif"],
         mono: ["JetBrains Mono", "Fira Code", "Courier New", "monospace"],
       },
       backgroundImage: {

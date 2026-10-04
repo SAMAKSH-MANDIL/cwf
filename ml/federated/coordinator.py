@@ -50,9 +50,10 @@ class FederatedCoordinator:
         """Initializes simulated hospital participants with private partitions."""
         partitions = get_federated_partitions()
         tiers = {
-            "node_alpha": "RTX4090",
-            "node_beta": "A100",
-            "node_gamma": "T4",
+            "node_alpha": "RTX 4090",
+            "node_beta": "Apple M3 Max",
+            "node_gamma": "AWS A100 TensorCore",
+            "node_delta": "Jetson Orin Nano",
         }
         for node_id, p_info in partitions.items():
             client = FederatedClient(
@@ -78,6 +79,68 @@ class FederatedCoordinator:
             "parameters_count": self.global_model.total_parameters(),
             "active_clients": len(self.clients),
         }
+
+    def get_architecture(self) -> Dict[str, Any]:
+        """Returns the current neural network architecture and hidden layer details."""
+        if hasattr(self.global_model, "hidden_layers"):
+            hidden = list(self.global_model.hidden_layers)
+            input_d = getattr(self.global_model, "input_dim", 16)
+            out_d = 1
+            model_type = getattr(self.global_model, "model_type", "logistic_regression")
+        else:
+            hidden = [32, 16]
+            input_d = 16
+            out_d = 2
+            model_type = "classification"
+
+        total_p = self.global_model.total_parameters()
+        layers = [{"layer_type": "input", "name": "Input Features", "nodes": input_d, "activation": "None"}]
+        for idx, n in enumerate(hidden):
+            layers.append({
+                "layer_type": "hidden",
+                "name": f"Hidden Layer {idx + 1}",
+                "nodes": n,
+                "activation": "ReLU",
+            })
+        layers.append({
+            "layer_type": "output",
+            "name": "Output Layer",
+            "nodes": out_d,
+            "activation": "Sigmoid" if out_d == 1 else "Softmax",
+        })
+
+        return {
+            "model_id": self.model_id,
+            "input_dim": input_d,
+            "hidden_layers": hidden,
+            "output_dim": out_d,
+            "model_type": model_type,
+            "total_parameters": total_p,
+            "num_hidden_layers": len(hidden),
+            "layers": layers,
+        }
+
+    def update_architecture(self, hidden_layers: List[int]) -> Dict[str, Any]:
+        """Reconfigures the neural network hidden layers and synchronizes all edge clients."""
+        from ml.models.dynamic_model import DynamicNeuralNetPure
+        input_d = getattr(self.global_model, "input_dim", 16)
+        cleaned_layers = [max(1, int(h)) for h in hidden_layers]
+        
+        self.global_model = DynamicNeuralNetPure(
+            input_dim=input_d,
+            hidden_layers=cleaned_layers,
+            model_type="logistic_regression",
+            seed=42,
+        )
+        self.current_round = 0
+        
+        for client in self.clients.values():
+            client.update_dataset_and_model(
+                (client._X_private, client._y_private),
+                self.global_model,
+            )
+            
+        return self.get_architecture()
 
     def run_training_round(
         self,

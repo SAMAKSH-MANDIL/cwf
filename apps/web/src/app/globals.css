@@ -1,3 +1,5 @@
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800;900&family=Space+Grotesk:wght@500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -8,15 +10,17 @@
   --background-end-rgb: 3, 5, 10;
 }
 
+html {
+  scroll-behavior: smooth;
+}
+
 body {
-  color: rgb(var(--foreground-rgb));
-  background: radial-gradient(circle at 50% 0%, #0c1527 0%, #050812 60%, #03050a 100%);
   min-height: 100vh;
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   overflow-x: hidden;
 }
 
-/* Glassmorphism panel utility */
+/* Glassmorphism panel utility for dashboard */
 .glass-panel {
   background: rgba(12, 19, 34, 0.65);
   backdrop-filter: blur(20px);
@@ -39,31 +43,28 @@ body {
 
 /* Custom modern scrollbars */
 ::-webkit-scrollbar {
-  width: 5px;
-  height: 5px;
+  width: 6px;
+  height: 6px;
 }
 
 ::-webkit-scrollbar-track {
-  background: transparent;
+  background: #f1ebd8;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #1e293b;
+  background: #c8bba8;
   border-radius: 9999px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #334155;
+  background: #a99a83;
 }
 
 @keyframes pulseSlow {
-
-  0%,
-  100% {
+  0%, 100% {
     opacity: 1;
     transform: scale(1);
   }
-
   50% {
     opacity: 0.85;
     transform: scale(1.02);
@@ -72,4 +73,116 @@ body {
 
 .animate-pulse-slow {
   animation: pulseSlow 4s ease-in-out infinite;
+}
+
+@keyframes spinSlow {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.animate-spin-slow {
+  animation: spinSlow 24s linear infinite;
+}
+
+@keyframes spinSlowReverse {
+  from {
+    transform: rotate(360deg);
+  }
+  to {
+    transform: rotate(0deg);
+  }
+}
+
+.animate-spin-slow-reverse {
+  animation: spinSlowReverse 32s linear infinite;
+}
+
+@keyframes floatGentle {
+  0% {
+    transform: translateY(0px) rotate(0deg);
+  }
+  50% {
+    transform: translateY(-8px) rotate(2deg);
+  }
+  100% {
+    transform: translateY(0px) rotate(0deg);
+  }
+}
+
+.animate-float {
+  animation: floatGentle 5s ease-in-out infinite;
+}
+
+@keyframes floatAlt {
+  0% {
+    transform: translateY(0px) scale(1);
+  }
+  50% {
+    transform: translateY(6px) scale(1.03);
+  }
+  100% {
+    transform: translateY(0px) scale(1);
+  }
+}
+
+.animate-float-alt {
+  animation: floatAlt 4.5s ease-in-out infinite;
+}
+
+@keyframes scanline {
+  0% {
+    transform: translateY(-100%);
+    opacity: 0;
+  }
+  50% {
+    opacity: 0.7;
+  }
+  100% {
+    transform: translateY(100%);
+    opacity: 0;
+  }
+}
+
+.animate-scanline {
+  animation: scanline 3.5s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
+
+/* Retro Editorial Theme Utilities */
+.font-display {
+  font-family: 'Space Grotesk', sans-serif;
+}
+
+.retro-border {
+  border: 1.5px solid #1c1917;
+}
+
+.retro-shadow {
+  box-shadow: 4px 4px 0px #1c1917;
+}
+
+.retro-shadow-sm {
+  box-shadow: 2px 2px 0px #1c1917;
+}
+
+.retro-shadow-lg {
+  box-shadow: 6px 6px 0px #1c1917;
+}
+
+.retro-btn {
+  border: 1.5px solid #1c1917;
+  transition: all 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.retro-btn:hover {
+  transform: translate(-2px, -2px);
+  box-shadow: 3px 3px 0px #1c1917;
+}
+
+.retro-btn:active {
+  transform: translate(1px, 1px);
+  box-shadow: 1px 1px 0px #1c1917;
 }

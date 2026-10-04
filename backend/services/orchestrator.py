@@ -192,9 +192,20 @@ class NetworkOrchestrator:
         )
 
         execution_logs: List[str] = []
+        node_logs: Dict[str, List[str]] = {}
+        for c in self.fl_coordinator.clients.values():
+            node_logs[c.client_id] = []
+            node_logs[c.name] = node_logs[c.client_id]
+        node_logs["coordinator"] = []
+
         def log_msg(tag: str, msg: str):
             t_str = time.strftime("%H:%M:%S")
-            execution_logs.append(f"[{t_str}] [{tag}] {msg}")
+            line = f"[{t_str}] [{tag}] {msg}"
+            execution_logs.append(line)
+            if tag in node_logs:
+                node_logs[tag].append(line)
+            elif tag in ("Coordinator", "Aggregator", "Arbitrum", "Solana", "Relayer"):
+                node_logs["coordinator"].append(line)
 
         log_msg("Coordinator", f"Starting Federated Round #{round_number} for model {self.model_id}")
         log_msg("Coordinator", f"Broadcasting global baseline weights (Hash: {base_hash[:16]}...) to {len(self.fl_coordinator.clients)} active edge nodes")
@@ -215,6 +226,13 @@ class NetworkOrchestrator:
                 epochs=local_epochs,
                 learning_rate=learning_rate,
             )
+
+            # Record detailed epoch logs for node terminal
+            t_str = time.strftime("%H:%M:%S")
+            for ep_info in local_res.get("epoch_logs", []):
+                ep_line = f"[{t_str}] [{client.name}] 🚀 Epoch {ep_info['epoch']}/{local_epochs}: Batch Loss = {ep_info['loss']:.4f} | Local SGD step complete"
+                node_logs[client.client_id].append(ep_line)
+                execution_logs.append(ep_line)
 
             loss_b = local_res["eval_before"]["loss"]
             loss_a = local_res["eval_after"]["loss"]
@@ -460,7 +478,40 @@ class NetworkOrchestrator:
             ],
             "raw_data_uploaded": 0,  # Demonstrates zero raw data leakage!
             "logs": execution_logs,
+            "node_logs": {
+                c.client_id: node_logs.get(c.client_id, [])
+                for c in self.fl_coordinator.clients.values()
+            },
+            "coordinator_logs": node_logs.get("coordinator", []),
+            "nodes_info": [
+                {
+                    "client_id": c.client_id,
+                    "name": c.name,
+                    "compute_tier": c.compute_tier,
+                    "num_samples": c.num_samples,
+                    "wallet_address": c.wallet_address,
+                }
+                for c in self.fl_coordinator.clients.values()
+            ],
         }
+
+    def get_model_architecture(self) -> Dict[str, Any]:
+        """Returns the current neural network architecture and layer breakdown."""
+        return self.fl_coordinator.get_architecture()
+
+    def update_model_architecture(self, hidden_layers: List[int]) -> Dict[str, Any]:
+        """Reconfigures the neural network hidden layers and synchronizes all edge clients."""
+        arch = self.fl_coordinator.update_architecture(hidden_layers=hidden_layers)
+        db = SessionLocal()
+        try:
+            m = db.query(ModelRecord).filter_by(id=self.model_id).first()
+            if m:
+                m.parameters_count = arch["total_parameters"]
+                m.architecture = f"DynamicNet-{arch['input_dim']}x{'-'.join(str(h) for h in arch['hidden_layers'])}x{arch['output_dim']}"
+                db.commit()
+        finally:
+            db.close()
+        return arch
 
     def get_network_dashboard_stats(self) -> Dict[str, Any]:
         """Gathers aggregated network stats across ML, Arbitrum, and Solana."""
