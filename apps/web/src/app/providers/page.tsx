@@ -1,14 +1,26 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Server, Cpu, CheckCircle2, ShieldCheck, Coins, Activity, HardDrive, Zap, ExternalLink, PlusCircle } from "lucide-react";
+import { Server, Cpu, CheckCircle2, ShieldCheck, Coins, Activity, HardDrive, Zap, ExternalLink, PlusCircle, X, Check } from "lucide-react";
 
 export default function ProvidersPage() {
   const [providers, setProviders] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [filterTier, setFilterTier] = useState<string>("ALL");
 
-  useEffect(() => {
+  // Registration modal states
+  const [showModal, setShowModal] = useState(false);
+  const [registering, setRegistering] = useState(false);
+  const [regSuccess, setRegSuccess] = useState(false);
+  const [nodeForm, setNodeForm] = useState({
+    name: "",
+    hardware_tier: "RTX 4090",
+    vram_gb: 16,
+    samples_count: 220,
+    wallet_address: "",
+  });
+
+  const loadProviders = () => {
     fetch("/api/providers")
       .then((res) => res.json())
       .then((data) => {
@@ -19,7 +31,51 @@ export default function ProvidersPage() {
         console.error(e);
         setLoading(false);
       });
+  };
+
+  useEffect(() => {
+    loadProviders();
   }, []);
+
+  const handleRegisterNode = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!nodeForm.name.trim()) return;
+
+    setRegistering(true);
+    try {
+      const res = await fetch("/api/devices/register", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: nodeForm.name,
+          hardware_tier: nodeForm.hardware_tier,
+          vram_gb: Number(nodeForm.vram_gb),
+          samples_count: Number(nodeForm.samples_count),
+          wallet_address: nodeForm.wallet_address.trim() || undefined,
+        }),
+      });
+
+      if (res.ok) {
+        setRegSuccess(true);
+        loadProviders();
+        setTimeout(() => {
+          setRegSuccess(false);
+          setShowModal(false);
+          setNodeForm({
+            name: "",
+            hardware_tier: "RTX 4090",
+            vram_gb: 16,
+            samples_count: 220,
+            wallet_address: "",
+          });
+        }, 1500);
+      }
+    } catch (err) {
+      console.error("Failed to register node", err);
+    } finally {
+      setRegistering(false);
+    }
+  };
 
   const totalVRAM = providers.reduce((acc, p) => acc + (p.declared_vram_gb || 0), 0);
   const totalRewards = providers.reduce((acc, p) => acc + (p.total_rewards_earned || 0), 0);
@@ -50,8 +106,8 @@ export default function ProvidersPage() {
           </div>
 
           <button
-            onClick={() => alert("Compute node daemon installer: curl -sSL https://network.verifiable-ai.org/install.sh | bash")}
-            className="px-5 py-2.5 bg-[#1C1917] text-white font-mono font-black text-xs uppercase tracking-wider border-2 border-[#1C1917] shadow-[3px_3px_0px_#059669] hover:bg-[#059669] transition-colors flex items-center space-x-2 shrink-0 self-start md:self-auto"
+            onClick={() => setShowModal(true)}
+            className="px-5 py-2.5 bg-[#1C1917] text-white font-mono font-black text-xs uppercase tracking-wider border-2 border-[#1C1917] shadow-[3px_3px_0px_#059669] hover:bg-[#059669] transition-colors flex items-center space-x-2 shrink-0 self-start md:self-auto cursor-pointer"
           >
             <PlusCircle className="w-4 h-4" />
             <span>JOIN AS COMPUTE WORKER</span>
@@ -113,7 +169,7 @@ export default function ProvidersPage() {
           <button
             key={tier}
             onClick={() => setFilterTier(tier)}
-            className={`px-3 py-1 font-mono text-xs font-bold border-2 border-[#1C1917] transition-all ${
+            className={`px-3 py-1 font-mono text-xs font-bold border-2 border-[#1C1917] transition-all cursor-pointer ${
               filterTier === tier
                 ? "bg-[#1C1917] text-white shadow-[2px_2px_0px_#E05338]"
                 : "bg-white text-[#1C1917] hover:bg-[#FAF7F2]"
@@ -189,7 +245,7 @@ export default function ProvidersPage() {
               <span className="text-[10px] font-mono text-[#1C1917]/50">TEE Attested • Intel SGX</span>
               <button
                 onClick={() => alert(`Node ${p.device_name} Telemetry: Latency 14ms | Memory Utilization 42% | Enclave Verified`)}
-                className="px-3 py-1 bg-[#FAF7F2] hover:bg-white text-[#1C1917] border border-[#1C1917] text-[11px] font-mono font-bold uppercase transition-colors"
+                className="px-3 py-1 bg-[#FAF7F2] hover:bg-white text-[#1C1917] border border-[#1C1917] text-[11px] font-mono font-bold uppercase transition-colors cursor-pointer"
               >
                 TELEMETRY →
               </button>
@@ -197,6 +253,138 @@ export default function ProvidersPage() {
           </div>
         ))}
       </div>
+
+      {/* ========================================================================= */}
+      {/* REGISTER NEW COMPUTE WORKER MODAL */}
+      {/* ========================================================================= */}
+      {showModal && (
+        <div className="fixed inset-0 z-50 bg-[#1C1917]/70 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-[#FAF7F2] border-2 border-[#1C1917] shadow-[6px_6px_0px_#1C1917] rounded-2xl w-full max-w-lg p-6 sm:p-8 space-y-6 relative animate-in fade-in zoom-in-95">
+            <button
+              onClick={() => setShowModal(false)}
+              className="absolute top-5 right-5 p-1 rounded-lg border border-[#1C1917]/30 hover:bg-[#F2ECE1] text-[#1C1917] cursor-pointer"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+            <div>
+              <div className="inline-flex items-center space-x-2 text-xs font-mono font-bold text-[#059669] uppercase">
+                <Server className="w-3.5 h-3.5" />
+                <span>Provision Edge Worker</span>
+              </div>
+              <h2 className="text-2xl font-black text-[#1C1917] font-display uppercase tracking-tight mt-1">
+                Register New Compute Node
+              </h2>
+              <p className="text-xs text-[#57534E] font-medium mt-1">
+                Connect your laptop, GPU cluster, or mobile device to participate in federated learning rounds.
+              </p>
+            </div>
+
+            {regSuccess ? (
+              <div className="p-6 bg-emerald-50 border-2 border-emerald-600 rounded-xl text-center space-y-2">
+                <div className="w-12 h-12 rounded-full bg-emerald-600 text-white flex items-center justify-center mx-auto">
+                  <Check className="w-6 h-6" />
+                </div>
+                <h3 className="font-display font-black text-lg text-emerald-900 uppercase">
+                  Node Successfully Registered!
+                </h3>
+                <p className="text-xs font-mono text-emerald-800">
+                  Provisioned local isolated dataset enclave and registered to Solana reward ledger.
+                </p>
+              </div>
+            ) : (
+              <form onSubmit={handleRegisterNode} className="space-y-4 font-mono text-xs">
+                <div>
+                  <label className="block text-[#1C1917] font-bold uppercase mb-1">
+                    Node Name / Identifier *
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="e.g. My Lenovo Legion / Lab Mac M2"
+                    value={nodeForm.name}
+                    onChange={(e) => setNodeForm({ ...nodeForm, name: e.target.value })}
+                    className="w-full p-3 bg-white border-2 border-[#1C1917] focus:outline-none focus:ring-2 focus:ring-[#059669] text-sm text-[#1C1917]"
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-[#1C1917] font-bold uppercase mb-1">
+                      Hardware Tier
+                    </label>
+                    <select
+                      value={nodeForm.hardware_tier}
+                      onChange={(e) => setNodeForm({ ...nodeForm, hardware_tier: e.target.value })}
+                      className="w-full p-3 bg-white border-2 border-[#1C1917] focus:outline-none focus:ring-2 focus:ring-[#059669] text-sm text-[#1C1917]"
+                    >
+                      <option value="RTX 4090">RTX 4090 (Tier 1)</option>
+                      <option value="Apple Silicon">Apple Silicon M-Series (Tier 2)</option>
+                      <option value="AWS A100">AWS A100 TensorCore</option>
+                      <option value="Jetson Orin">Jetson Orin Nano (Edge)</option>
+                      <option value="GTX 1650/RTX 3050">NVIDIA Laptop GPU</option>
+                      <option value="CPU Core">Standard CPU Enclave</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-[#1C1917] font-bold uppercase mb-1">
+                      Allocated VRAM (GB)
+                    </label>
+                    <input
+                      type="number"
+                      min={2}
+                      max={128}
+                      value={nodeForm.vram_gb}
+                      onChange={(e) => setNodeForm({ ...nodeForm, vram_gb: Number(e.target.value) })}
+                      className="w-full p-3 bg-white border-2 border-[#1C1917] focus:outline-none focus:ring-2 focus:ring-[#059669] text-sm text-[#1C1917]"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-[#1C1917] font-bold uppercase mb-1">
+                      Private Dataset Size
+                    </label>
+                    <input
+                      type="number"
+                      min={50}
+                      max={2000}
+                      value={nodeForm.samples_count}
+                      onChange={(e) => setNodeForm({ ...nodeForm, samples_count: Number(e.target.value) })}
+                      className="w-full p-3 bg-white border-2 border-[#1C1917] focus:outline-none focus:ring-2 focus:ring-[#059669] text-sm text-[#1C1917]"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[#1C1917] font-bold uppercase mb-1">
+                      Solana Wallet Address
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="Optional (Auto-generated)"
+                      value={nodeForm.wallet_address}
+                      onChange={(e) => setNodeForm({ ...nodeForm, wallet_address: e.target.value })}
+                      className="w-full p-3 bg-white border-2 border-[#1C1917] focus:outline-none focus:ring-2 focus:ring-[#059669] text-xs text-[#1C1917]"
+                    />
+                  </div>
+                </div>
+
+                <div className="pt-2">
+                  <button
+                    type="submit"
+                    disabled={registering}
+                    className="w-full py-3.5 bg-[#059669] hover:bg-[#047857] text-white font-display font-black text-sm uppercase tracking-wider border-2 border-[#1C1917] shadow-[3px_3px_0px_#1C1917] transition-all disabled:opacity-50 cursor-pointer"
+                  >
+                    {registering ? "PROVISIONING WORKER NODE..." : "CONFIRM & JOIN COMPUTE MESH ⚡"}
+                  </button>
+                </div>
+              </form>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
