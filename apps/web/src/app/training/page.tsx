@@ -347,6 +347,56 @@ export default function TrainingPage() {
     },
   ]);
 
+  // Real-time multi-device sync with live registered providers from backend
+  useEffect(() => {
+    let isSubscribed = true;
+    const syncProviders = () => {
+      fetch("/api/providers")
+        .then((res) => res.json())
+        .then((data: any[]) => {
+          if (!isSubscribed || !data || !Array.isArray(data)) return;
+          setEdgeNodes((prev) => {
+            const prevMap = new Map(
+              prev.map((p) => [
+                p.wallet_address.toLowerCase(),
+                { enabled: p.enabled, samples: p.samples_count, tier: p.hardware_tier, vram: p.vram_gb },
+              ])
+            );
+            const prevNameMap = new Map(
+              prev.map((p) => [
+                p.name.toLowerCase(),
+                { enabled: p.enabled, samples: p.samples_count, tier: p.hardware_tier, vram: p.vram_gb },
+              ])
+            );
+
+            return data.map((d, idx) => {
+              const wKey = (d.wallet_address || "").toLowerCase();
+              const nKey = (d.device_name || "").toLowerCase();
+              const existing = prevMap.get(wKey) || prevNameMap.get(nKey);
+
+              return {
+                id: d.wallet_address || `node-${idx + 1}`,
+                name: d.device_name || `Edge Node ${idx + 1}`,
+                hardware_tier: existing?.tier || d.hardware_tier || "RTX 4090",
+                vram_gb: existing?.vram || d.declared_vram_gb || 16,
+                samples_count: existing?.samples ?? (d.samples_count || 120),
+                wallet_address: d.wallet_address || `0x...`,
+                enabled: existing ? existing.enabled : true,
+              };
+            });
+          });
+        })
+        .catch((e) => console.error("Failed to sync edge nodes from providers", e));
+    };
+
+    syncProviders();
+    const interval = setInterval(syncProviders, 3000);
+    return () => {
+      isSubscribed = false;
+      clearInterval(interval);
+    };
+  }, []);
+
   const [showAddNodeModal, setShowAddNodeModal] = useState(false);
   const [newNodeName, setNewNodeName] = useState("");
   const [newNodeTier, setNewNodeTier] = useState("RTX 4090");
@@ -411,12 +461,33 @@ export default function TrainingPage() {
     );
   };
 
-  const removeNode = (id: string) => {
-    if (edgeNodes.filter((n) => n.enabled).length <= 1) return;
-    setEdgeNodes(edgeNodes.filter((n) => n.id !== id));
+  const removeNode = async (id: string) => {
+    if (edgeNodes.length <= 1) {
+      alert("At least 1 edge participant must remain in the network.");
+      return;
+    }
+    const targetNode = edgeNodes.find((n) => n.id === id);
+    setEdgeNodes((prev) => prev.filter((n) => n.id !== id));
+    if (targetNode) {
+      if (typeof window !== "undefined") {
+        const saved = localStorage.getItem("fedzero_device_node");
+        if (saved && targetNode.name.toLowerCase().includes(saved.toLowerCase())) {
+          localStorage.removeItem("fedzero_device_node");
+        }
+      }
+      try {
+        await fetch("/api/devices/delete", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ identifier: targetNode.wallet_address || targetNode.name || id }),
+        });
+      } catch (err) {
+        console.error("Failed to delete node on backend", err);
+      }
+    }
   };
 
-  const handleAddNewNode = (e: React.FormEvent) => {
+  const handleAddNewNode = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newNodeName.trim()) return;
     const newId = `node-${Date.now()}`;
@@ -425,8 +496,23 @@ export default function TrainingPage() {
       ? Math.floor(totalDatasetRecords / (activeNodes.length + 1))
       : newNodeSamples;
 
-    setEdgeNodes([
-      ...edgeNodes,
+    try {
+      await fetch("/api/devices/register", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: newNodeName,
+          hardware_tier: newNodeTier,
+          vram_gb: Number(newNodeVram),
+          samples_count: Number(initialSamples),
+        }),
+      });
+    } catch (err) {
+      console.error("Failed to register node on backend", err);
+    }
+
+    setEdgeNodes((prev) => [
+      ...prev,
       {
         id: newId,
         name: newNodeName,
@@ -513,20 +599,87 @@ export default function TrainingPage() {
   const logsEndRef = useRef<HTMLDivElement>(null);
   const executionBoxRef = useRef<HTMLDivElement>(null);
 
-  // Initialize node logs safely after client mount
+  // Initialize node logs safely whenever edgeNodes updates
   useEffect(() => {
     setMounted(true);
-    const initial: Record<string, string[]> = {};
-    const ts = new Date().toLocaleTimeString();
-    edgeNodes.forEach((node) => {
-      initial[node.id] = [
-        `[${ts}] [ENV_INIT] Initialized hardware enclave sandbox for "${node.name}" (${node.hardware_tier}).`,
-        `[${ts}] [LOCAL_DATA] Secure partition mounted with ${node.samples_count} private biomarker samples.`,
-        `[${ts}] [NODE_READY] Worker daemon listening. Standby for federated dispatch instruction.`,
-      ];
+    setNodeLogs((prev) => {
+      const next = { ...prev };
+      const ts = new Date().toLocaleTimeString();
+      edgeNodes.forEach((node) => {
+        if (!next[node.id] || next[node.id].length === 0) {
+          next[node.id] = [
+            `[${ts}] [ENV_INIT] Initialized hardware enclave sandbox for "${node.name}" (${node.hardware_tier}).`,
+            `[${ts}] [LOCAL_DATA] Secure partition mounted with ${node.samples_count} private biomarker samples.`,
+            `[${ts}] [NODE_READY] Worker daemon listening. Standby for federated dispatch instruction.`,
+          ];
+        }
+      });
+      return next;
     });
-    setNodeLogs(initial);
-  }, []);
+  }, [edgeNodes]);
+
+  // Auto-detect if current device is a registered worker node (e.g. LOQ_Vinu) from localStorage or URL
+  useEffect(() => {
+    if (typeof window !== "undefined" && edgeNodes.length > 0) {
+      const savedNode = localStorage.getItem("fedzero_device_node");
+      if (savedNode) {
+        const found = edgeNodes.find((n) => n.name.toLowerCase().includes(savedNode.toLowerCase()));
+        if (found) {
+          setActiveLogTab(found.id);
+          return;
+        }
+      }
+      const params = new URLSearchParams(window.location.search);
+      const urlNode = params.get("node");
+      if (urlNode) {
+        const found = edgeNodes.find((n) => n.name.toLowerCase().includes(urlNode.toLowerCase()));
+        if (found) setActiveLogTab(found.id);
+      }
+    }
+  }, [edgeNodes]);
+
+  // Cross-device multi-terminal sync: polls backend for live federated round execution logs
+  useEffect(() => {
+    let lastSeenRound = 0;
+    const interval = setInterval(async () => {
+      try {
+        const res = await fetch("/api/training/latest-round-logs");
+        if (!res.ok) return;
+        const data = await res.json();
+        if (
+          data &&
+          data.round_number &&
+          data.round_number > 0 &&
+          data.node_logs &&
+          Object.keys(data.node_logs).length > 0 &&
+          data.round_number !== lastSeenRound
+        ) {
+          lastSeenRound = data.round_number;
+          setNodeLogs((prev) => {
+            const next = { ...prev };
+            Object.entries(data.node_logs).forEach(([rawKey, lines]) => {
+              if (Array.isArray(lines) && lines.length > 0) {
+                // Find matching node by id, name, or wallet address
+                const matched = edgeNodes.find(
+                  (n) =>
+                    n.id.toLowerCase() === rawKey.toLowerCase() ||
+                    n.name.toLowerCase() === rawKey.toLowerCase() ||
+                    n.wallet_address.toLowerCase() === rawKey.toLowerCase()
+                );
+                const targetKey = matched ? matched.id : rawKey;
+                next[targetKey] = lines as string[];
+              }
+            });
+            return next;
+          });
+        }
+      } catch (e) {
+        // silent catch
+      }
+    }, 2000);
+
+    return () => clearInterval(interval);
+  }, [edgeNodes]);
 
   const copyLogs = (key: string) => {
     let text = "";
@@ -588,6 +741,7 @@ export default function TrainingPage() {
       setNodeLogs((prev) => {
         const next = { ...prev };
         activeNodes.forEach((node, idx) => {
+          if (!next[node.id]) next[node.id] = [];
           const startLoss = (0.74 - idx * 0.03).toFixed(4);
           const endLoss = (0.16 - idx * 0.02).toFixed(4);
           const loggedEpochs = Math.min(epochs, 8); // show up to 8 epoch lines cleanly
@@ -616,6 +770,7 @@ export default function TrainingPage() {
       setNodeLogs((prev) => {
         const next = { ...prev };
         activeNodes.forEach((node, idx) => {
+          if (!next[node.id]) next[node.id] = [];
           const proofHex = `0x${Math.random().toString(16).substring(2, 14)}...${Math.random().toString(16).substring(2, 6)}`;
           next[node.id].push(
             `[${ts()}] [CIRCUIT_SYNTH] Arithmetizing ONNX computational graph into Halo2 KZG constraint system...`,
@@ -633,6 +788,7 @@ export default function TrainingPage() {
       setNodeLogs((prev) => {
         const next = { ...prev };
         activeNodes.forEach((node) => {
+          if (!next[node.id]) next[node.id] = [];
           next[node.id].push(
             `[${ts()}] [ARBITRUM_L2] Submitting proof to ZKVerifier.sol on Sepolia L2 (Bilinear pairing check)...`,
             `[${ts()}] [ARBITRUM_L2] Verification Status: VALID. Emitted 'ProofVerified' for wallet ${node.wallet_address.substring(0, 10)}...`
@@ -648,6 +804,7 @@ export default function TrainingPage() {
       setNodeLogs((prev) => {
         const next = { ...prev };
         activeNodes.forEach((node) => {
+          if (!next[node.id]) next[node.id] = [];
           next[node.id].push(
             `[${ts()}] [BRIDGE_RELAY] Dual-chain relayer bridged Arbitrum proof receipt to Solana Devnet.`
           );
@@ -681,6 +838,7 @@ export default function TrainingPage() {
       setNodeLogs((prev) => {
         const next = { ...prev };
         activeNodes.forEach((node, idx) => {
+          if (!next[node.id]) next[node.id] = [];
           const rewardAmount = (19.2 + idx * 3.8).toFixed(1);
           next[node.id].push(
             `[${ts()}] [SOLANA_SETTLE] Dynamic incentive confirmed: ${rewardAmount} SOL minted to ${node.wallet_address.substring(0, 10)}... (Tx: ${solSig})`,
@@ -695,7 +853,11 @@ export default function TrainingPage() {
         await fetch("/api/demo/run-round", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ epochs, learning_rate: learningRate }),
+          body: JSON.stringify({
+            epochs,
+            learning_rate: learningRate,
+            active_node_ids: activeNodes.map((n) => n.wallet_address || n.name || n.id),
+          }),
         });
       } catch (err) {
         // Backend fallback is handled in UI state
@@ -706,8 +868,19 @@ export default function TrainingPage() {
     }, 4000);
   };
 
+  const stripEmojis = (str: string) => {
+    return str
+      .replace(
+        /([\u2700-\u27BF]|[\uE000-\uF8FF]|\uD83C[\uDC00-\uDFFF]|\uD83D[\uDC00-\uDFFF]|[\u2011-\u26FF]|\uD83E[\uDD10-\uDDFF])/g,
+        ""
+      )
+      .replace(/\s{2,}/g, " ")
+      .trim();
+  };
+
   const renderFormattedLogLine = (line: string, index: number) => {
-    if (line.startsWith("---")) {
+    const cleanRaw = stripEmojis(line);
+    if (cleanRaw.startsWith("---")) {
       return (
         <div key={index} className="text-stone-700 select-none py-0.5 text-[10px]">
           ────────────────────────────────────────────────────────────────────────────────
@@ -715,37 +888,38 @@ export default function TrainingPage() {
       );
     }
 
-    const match = line.match(/^(\[[^\]]+\])\s*(\[[^\]]+\])\s*(.*)$/);
+    const match = cleanRaw.match(/^(\[[^\]]+\])\s*(\[[^\]]+\])\s*(.*)$/);
     if (match) {
       const [, timestamp, tag, message] = match;
       const tagClean = tag.replace(/[\[\]]/g, "");
       const tagUpper = tagClean.toUpperCase();
+      const cleanMessage = stripEmojis(message);
 
       let tagStyle = "text-stone-300 bg-stone-900 border-stone-700";
       let msgStyle = "text-stone-300";
 
-      if (tagUpper.includes("DISPATCH") || tagUpper.includes("TOPOLOGY") || tagUpper.includes("DATA_CONFIG")) {
+      if (tagUpper.includes("DISPATCH") || tagUpper.includes("TOPOLOGY") || tagUpper.includes("DATA_CONFIG") || tagUpper.includes("INIT")) {
         tagStyle = "text-[#E05338] bg-[#E05338]/10 border-[#E05338]/30";
         msgStyle = "text-stone-200 font-medium";
-      } else if (tagUpper.includes("SGD")) {
+      } else if (tagUpper.includes("SGD") || tagUpper.includes("LOCAL_SGD")) {
         tagStyle = "text-sky-400 bg-sky-950/60 border-sky-800/40";
         msgStyle = "text-stone-200";
-      } else if (tagUpper.includes("CIRCUIT") || tagUpper.includes("PROOF")) {
+      } else if (tagUpper.includes("CIRCUIT") || tagUpper.includes("PROOF") || tagUpper.includes("ZKML")) {
         tagStyle = "text-amber-400 bg-amber-950/60 border-amber-800/40";
         msgStyle = "text-amber-200/95 font-medium";
-      } else if (tagUpper.includes("ARBITRUM") || tagUpper.includes("L2")) {
+      } else if (tagUpper.includes("ARBITRUM") || tagUpper.includes("L2") || tagUpper.includes("PAIRING") || tagUpper.includes("MODEL_REGISTRY")) {
         tagStyle = "text-purple-400 bg-purple-950/60 border-purple-800/40";
         msgStyle = "text-purple-200/90";
       } else if (tagUpper.includes("RELAYER") || tagUpper.includes("BRIDGE")) {
         tagStyle = "text-cyan-400 bg-cyan-950/60 border-cyan-800/40";
         msgStyle = "text-cyan-200/90";
-      } else if (tagUpper.includes("SOLANA") || tagUpper.includes("SETTLE")) {
+      } else if (tagUpper.includes("SOLANA") || tagUpper.includes("SETTLE") || tagUpper.includes("REWARD")) {
         tagStyle = "text-emerald-400 bg-emerald-950/70 border-emerald-700/50";
         msgStyle = "text-emerald-200 font-bold";
-      } else if (tagUpper.includes("CONVERGED") || tagUpper.includes("FINALIZED") || tagUpper.includes("FEDAVG")) {
+      } else if (tagUpper.includes("CONVERGED") || tagUpper.includes("FINALIZED") || tagUpper.includes("FEDAVG") || tagUpper.includes("TRAIN_COMPLETE") || tagUpper.includes("ROUND_COMPLETE")) {
         tagStyle = "text-emerald-300 bg-emerald-900/60 border-emerald-600/50";
         msgStyle = "text-emerald-300 font-bold";
-      } else if (tagUpper.includes("ENV_INIT") || tagUpper.includes("LOCAL_DATA") || tagUpper.includes("NODE_READY")) {
+      } else if (tagUpper.includes("ENV_INIT") || tagUpper.includes("LOCAL_DATA") || tagUpper.includes("NODE_READY") || tagUpper.includes("PRIVACY_GUARD")) {
         tagStyle = "text-stone-400 bg-stone-900/80 border-stone-800";
         msgStyle = "text-stone-400";
       }
@@ -756,14 +930,14 @@ export default function TrainingPage() {
           <span className={`px-1.5 py-0.5 rounded border text-[9px] uppercase tracking-wider shrink-0 font-bold font-mono ${tagStyle}`}>
             {tagClean}
           </span>
-          <span className={`break-words ${msgStyle}`}>{message}</span>
+          <span className={`break-words ${msgStyle}`}>{cleanMessage}</span>
         </div>
       );
     }
 
     return (
       <div key={index} className="text-stone-400 text-[11px] leading-relaxed font-mono px-1 py-0.5">
-        {line}
+        {cleanRaw}
       </div>
     );
   };
@@ -1304,7 +1478,7 @@ export default function TrainingPage() {
                     </span>
                   </label>
 
-                  {edgeNodes.length > 2 && (
+                  {edgeNodes.length > 1 && (
                     <button
                       type="button"
                       onClick={() => removeNode(node.id)}
@@ -1708,34 +1882,59 @@ export default function TrainingPage() {
 
           {/* Action CTAs & View Tabs */}
           <div className="flex flex-wrap items-center gap-2 font-mono text-xs">
+            {/* Direct 1-Click Button to Focus on LOQ_Vinu */}
+            {edgeNodes.filter((n) => n.name.toLowerCase().includes("loq") || n.name.toLowerCase().includes("vinu")).map((loqNode) => (
+              <button
+                key={loqNode.id}
+                onClick={() => {
+                  setActiveLogTab(loqNode.id);
+                  if (typeof window !== "undefined") localStorage.setItem("fedzero_device_node", loqNode.name);
+                }}
+                className={`px-4 py-2 rounded-xl border-2 font-black transition-all flex items-center space-x-2 cursor-pointer shadow-md ${
+                  activeLogTab === loqNode.id
+                    ? "bg-[#059669] text-white border-emerald-300 ring-2 ring-emerald-400 scale-102"
+                    : "bg-emerald-950/80 border-emerald-600 text-emerald-300 hover:bg-emerald-900"
+                }`}
+              >
+                <Laptop className="w-4 h-4 text-emerald-400 animate-pulse" />
+                <span>💻 SHOW ONLY {loqNode.name.toUpperCase()} (MY LAPTOP)</span>
+              </button>
+            ))}
+
             <button
-              onClick={() => setActiveLogTab("all")}
-              className={`px-3 py-1.5 rounded-lg border font-bold transition-all ${
+              onClick={() => {
+                setActiveLogTab("all");
+                if (typeof window !== "undefined") localStorage.removeItem("fedzero_device_node");
+              }}
+              className={`px-3 py-1.5 rounded-lg border font-bold transition-all cursor-pointer ${
                 activeLogTab === "all"
                   ? "bg-[#E05338] text-white border-[#E05338]"
                   : "bg-stone-900 border-stone-700 text-stone-400 hover:text-white"
               }`}
             >
-              All Nodes Terminal
+              🌐 All Nodes ({activeNodes.length} Devices)
             </button>
 
             {activeNodes.map((node) => (
               <button
                 key={node.id}
-                onClick={() => setActiveLogTab(node.id)}
-                className={`px-3 py-1.5 rounded-lg border font-bold transition-all ${
+                onClick={() => {
+                  setActiveLogTab(node.id);
+                  if (typeof window !== "undefined") localStorage.setItem("fedzero_device_node", node.name);
+                }}
+                className={`px-3 py-1.5 rounded-lg border font-bold transition-all cursor-pointer ${
                   activeLogTab === node.id
-                    ? "bg-white text-[#1C1917] border-white"
+                    ? "bg-white text-[#1C1917] border-white font-black"
                     : "bg-stone-900 border-stone-700 text-stone-400 hover:text-white"
                 }`}
               >
-                {node.name.split(" ")[0]} ({node.hardware_tier.split(" ")[0]})
+                {node.name}
               </button>
             ))}
 
             <button
               onClick={() => copyLogs(activeLogTab)}
-              className="px-3 py-1.5 rounded-lg bg-stone-800 hover:bg-stone-700 text-stone-200 border border-stone-600 flex items-center space-x-1.5"
+              className="px-3 py-1.5 rounded-lg bg-stone-800 hover:bg-stone-700 text-stone-200 border border-stone-600 flex items-center space-x-1.5 cursor-pointer"
             >
               <Copy className="w-3.5 h-3.5" />
               <span>{copiedLogNode === activeLogTab ? "Copied!" : "Copy Logs"}</span>
@@ -1743,7 +1942,7 @@ export default function TrainingPage() {
 
             <button
               onClick={clearLogs}
-              className="px-2.5 py-1.5 rounded-lg bg-stone-900 hover:bg-stone-800 text-stone-400 hover:text-stone-200 border border-stone-800"
+              className="px-2.5 py-1.5 rounded-lg bg-stone-900 hover:bg-stone-800 text-stone-400 hover:text-stone-200 border border-stone-800 cursor-pointer"
               title="Clear Terminal Output"
             >
               Clear
@@ -1783,31 +1982,27 @@ export default function TrainingPage() {
           })}
         </div>
 
-        {/* LOGS DISPLAY CONTAINER */}
+        {/* LOGS DISPLAY CONTAINER: MULTI-TERMINAL SIDE-BY-SIDE GRID */}
         {activeLogTab === "all" ? (
-          /* Multi-Node Side-by-Side Grid View (All Nodes in One Box) */
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
             {activeNodes.map((node) => {
               const lines = nodeLogs[node.id] || [
-                `[STANDBY] Enclave sandbox mounted. Ready for training dispatch.`,
+                `[STANDBY] Enclave sandbox mounted for ${node.name}. Ready for training dispatch.`,
               ];
               return (
                 <div
                   key={node.id}
-                  className="rounded-xl bg-[#09090B] border border-stone-800 flex flex-col h-[340px] overflow-hidden shadow-2xl"
+                  className="rounded-xl bg-[#09090B] border-2 border-stone-800 flex flex-col h-[380px] overflow-hidden shadow-2xl hover:border-stone-600 transition-colors"
                 >
                   {/* Node Terminal Header */}
                   <div className="px-3.5 py-2.5 bg-[#141417] border-b border-stone-800 flex items-center justify-between text-xs font-mono">
                     <div className="flex items-center space-x-2">
-                      <span className="w-2 h-2 rounded-full bg-emerald-400"></span>
-                      <span className="font-bold text-stone-200">{node.name}</span>
+                      <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                      <span className="font-bold text-white truncate max-w-[140px]">{node.name}</span>
                     </div>
-                    <div className="flex items-center space-x-2">
-                      <span className="text-[10px] text-stone-400 bg-stone-900 px-2 py-0.5 rounded border border-stone-700">
+                    <div className="flex items-center space-x-1.5">
+                      <span className="text-[10px] text-[#E5A638] bg-stone-900 px-2 py-0.5 rounded border border-stone-700 font-bold truncate max-w-[110px]">
                         {node.hardware_tier}
-                      </span>
-                      <span className="text-[10px] text-[#E5A638] font-bold">
-                        {node.samples_count} Samples
                       </span>
                     </div>
                   </div>
@@ -1820,23 +2015,32 @@ export default function TrainingPage() {
                     {lines.map((l, i) => renderFormattedLogLine(l, i))}
                     <div ref={logsEndRef} />
                   </div>
+
+                  {/* Terminal Footer status */}
+                  <div className="px-3 py-1.5 bg-[#101013] border-t border-stone-800 text-[10px] font-mono text-stone-500 flex items-center justify-between">
+                    <span>{node.samples_count} Local Records</span>
+                    <span className="text-emerald-400 font-bold">TEE ENCLAVE ACTIVE</span>
+                  </div>
                 </div>
               );
             })}
           </div>
         ) : (
           /* Single Node Full-Screen Terminal View */
-          <div className="rounded-xl bg-[#09090B] border border-stone-800 flex flex-col h-[400px] overflow-hidden shadow-2xl">
-            <div className="px-4 py-2.5 bg-[#141417] border-b border-stone-800 flex items-center justify-between text-xs font-mono">
+          <div className="rounded-xl bg-[#09090B] border-2 border-stone-800 flex flex-col h-[460px] overflow-hidden shadow-2xl">
+            <div className="px-4 py-3 bg-[#141417] border-b border-stone-800 flex items-center justify-between text-xs font-mono">
               <div className="flex items-center space-x-2">
                 <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse"></span>
                 <span className="font-bold text-white">
-                  {edgeNodes.find((n) => n.id === activeLogTab)?.name || "Edge Node"} Console Stream
+                  {edgeNodes.find((n) => n.id === activeLogTab)?.name || "Edge Node"} Dedicated Console
                 </span>
               </div>
-              <span className="text-xs text-stone-400 font-mono">
-                {edgeNodes.find((n) => n.id === activeLogTab)?.wallet_address}
-              </span>
+              <div className="flex items-center space-x-3 text-xs text-stone-400 font-mono">
+                <span className="text-[#E5A638] font-bold">
+                  {edgeNodes.find((n) => n.id === activeLogTab)?.hardware_tier}
+                </span>
+                <span>{edgeNodes.find((n) => n.id === activeLogTab)?.wallet_address}</span>
+              </div>
             </div>
 
             <div

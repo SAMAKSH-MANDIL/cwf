@@ -13,7 +13,12 @@ import os
 import json
 import time
 import hashlib
+import re
 from typing import Dict, List, Any, Optional
+
+EMOJI_REGEX = re.compile(
+    r"[\U00010000-\U0010ffff\u2600-\u27bf\u2300-\u23ff\u2b50\u200d\ufe0f\U0001f300-\U0001f9ff]"
+)
 
 from ml.federated.coordinator import FederatedCoordinator
 from zkml.model.zkml_engine import ZkMLProverEngine
@@ -44,6 +49,8 @@ class NetworkOrchestrator:
         self.zkml_engine = ZkMLProverEngine(circuit_onnx_path="./zkml/circuits/diagnostic_net.onnx")
         self.arbitrum = ArbitrumEVMService()
         self.solana = SolanaRewardService()
+        self.last_round_logs: Dict[str, List[str]] = {}
+        self.last_round_number: int = 0
 
         # Seed initial model on Arbitrum and in DB if not present
         self._bootstrap_initial_state()
@@ -91,6 +98,39 @@ class NetworkOrchestrator:
                     db.merge(prov_rec)
 
                 db.commit()
+
+            # Sync all registered compute providers from DB into federated clients and solana
+            from ml.datasets.synthetic_data import generate_synthetic_biomarkers
+            from ml.clients.federated_client import FederatedClient
+            import numpy as np
+
+            existing_wallets = {c.wallet_address.lower() for c in self.fl_coordinator.clients.values()}
+            for prov in db.query(ComputeProviderRecord).all():
+                if prov.wallet_address.lower() not in existing_wallets:
+                    node_id = f"node_{prov.wallet_address[-6:].lower()}"
+                    seed = int(hashlib.md5(prov.wallet_address.encode()).hexdigest()[:6], 16) % 100000
+                    data = generate_synthetic_biomarkers(
+                        n_samples=prov.vram_gb * 10 if prov.vram_gb else 120,
+                        class_ratio=0.5,
+                        noise_level=0.12,
+                        bias_shift=float(np.random.uniform(-0.1, 0.1)),
+                        seed=seed,
+                    )
+                    client = FederatedClient(
+                        client_id=node_id,
+                        name=prov.device_name,
+                        wallet_address=prov.wallet_address,
+                        private_data=data,
+                        compute_tier=prov.hardware_tier,
+                    )
+                    self.fl_coordinator.clients[node_id] = client
+                    self.solana.register_provider(
+                        wallet_address=prov.wallet_address,
+                        device_name=prov.device_name,
+                        hardware_tier=prov.hardware_tier,
+                        declared_vram_gb=prov.vram_gb or 16,
+                    )
+                    existing_wallets.add(prov.wallet_address.lower())
         finally:
             db.close()
 
@@ -168,11 +208,54 @@ class NetworkOrchestrator:
             "active_clients_count": len(self.fl_coordinator.clients),
         }
 
+    def remove_device(self, identifier: str) -> bool:
+        """
+        Removes an edge node/provider from solana registry, coordinator clients, and database.
+        """
+        norm_id = identifier.lower().strip()
+
+        # 1. Solana registry
+        self.solana.remove_provider(identifier)
+
+        # 2. Federated coordinator clients
+        for cid, client in list(self.fl_coordinator.clients.items()):
+            w_addr = (getattr(client, "wallet_address", "") or "").lower()
+            c_name = (getattr(client, "name", "") or "").lower()
+            if (
+                cid.lower() == norm_id
+                or c_name == norm_id
+                or w_addr == norm_id
+                or norm_id in c_name
+                or norm_id in w_addr
+            ):
+                del self.fl_coordinator.clients[cid]
+
+        # 3. Database records
+        db = SessionLocal()
+        try:
+            records = db.query(ComputeProviderRecord).all()
+            for r in records:
+                r_wallet = (r.wallet_address or "").lower()
+                r_name = (r.device_name or "").lower()
+                if (
+                    r_wallet == norm_id
+                    or r_name == norm_id
+                    or norm_id in r_name
+                    or norm_id in r_wallet
+                ):
+                    db.delete(r)
+            db.commit()
+        finally:
+            db.close()
+
+        return True
+
     def execute_live_round(
         self,
         local_epochs: int = 4,
         learning_rate: float = 0.03,
         simulate_corrupt_proof_node: Optional[str] = None,
+        active_node_ids: Optional[List[str]] = None,
     ) -> Dict[str, Any]:
         """
         Executes complete end-to-end decentralized training round:
@@ -191,24 +274,44 @@ class NetworkOrchestrator:
             self.fl_coordinator.X_val, self.fl_coordinator.y_val
         )
 
+        # Select only active edge clients specified by frontend or registered mesh
+        participating_clients = {}
+        if active_node_ids:
+            active_set = {str(a).lower().strip() for a in active_node_ids}
+            for cid, c in self.fl_coordinator.clients.items():
+                w_addr = (getattr(c, "wallet_address", "") or "").lower()
+                c_name = (getattr(c, "name", "") or "").lower()
+                if (
+                    cid.lower() in active_set
+                    or w_addr in active_set
+                    or c_name in active_set
+                    or any(a in c_name or a in w_addr for a in active_set)
+                ):
+                    participating_clients[cid] = c
+        if not participating_clients:
+            participating_clients = self.fl_coordinator.clients
+
         execution_logs: List[str] = []
         node_logs: Dict[str, List[str]] = {}
-        for c in self.fl_coordinator.clients.values():
+        for c in participating_clients.values():
             node_logs[c.client_id] = []
             node_logs[c.name] = node_logs[c.client_id]
+            node_logs[c.wallet_address] = node_logs[c.client_id]
+            node_logs[c.wallet_address.lower()] = node_logs[c.client_id]
         node_logs["coordinator"] = []
 
         def log_msg(tag: str, msg: str):
             t_str = time.strftime("%H:%M:%S")
-            line = f"[{t_str}] [{tag}] {msg}"
+            clean_msg = EMOJI_REGEX.sub("", msg).strip()
+            line = f"[{t_str}] [{tag}] {clean_msg}"
             execution_logs.append(line)
             if tag in node_logs:
                 node_logs[tag].append(line)
             elif tag in ("Coordinator", "Aggregator", "Arbitrum", "Solana", "Relayer"):
                 node_logs["coordinator"].append(line)
 
-        log_msg("Coordinator", f"Starting Federated Round #{round_number} for model {self.model_id}")
-        log_msg("Coordinator", f"Broadcasting global baseline weights (Hash: {base_hash[:16]}...) to {len(self.fl_coordinator.clients)} active edge nodes")
+        log_msg("Coordinator", f"[INIT] Starting Federated Round #{round_number} for model {self.model_id}")
+        log_msg("Coordinator", f"[DISPATCH] Broadcasting global baseline weights (Hash: {base_hash[:16]}...) to {len(participating_clients)} active edge nodes")
 
         client_updates = []
         proof_records_data = []
@@ -216,9 +319,9 @@ class NetworkOrchestrator:
         solana_payouts = []
 
         # Step 1 & 2: Local training & zkML proof synthesis for each client
-        for client_id, client in self.fl_coordinator.clients.items():
-            log_msg(client.name, f"🔒 [Privacy Guard] Loaded {client.num_samples} local samples. Raw data strictly quarantined.")
-            log_msg(client.name, f"⚡ Starting local mini-batch SGD on {client.compute_tier} ({local_epochs} epochs, lr={learning_rate})...")
+        for client_id, client in participating_clients.items():
+            log_msg(client.name, f"[PRIVACY_GUARD] Loaded {client.num_samples} local samples. Raw data strictly quarantined.")
+            log_msg(client.name, f"[LOCAL_SGD] Starting local mini-batch SGD on {client.compute_tier} ({local_epochs} epochs, lr={learning_rate})...")
 
             # Local private training
             local_res = client.train_round(
@@ -230,18 +333,18 @@ class NetworkOrchestrator:
             # Record detailed epoch logs for node terminal
             t_str = time.strftime("%H:%M:%S")
             for ep_info in local_res.get("epoch_logs", []):
-                ep_line = f"[{t_str}] [{client.name}] 🚀 Epoch {ep_info['epoch']}/{local_epochs}: Batch Loss = {ep_info['loss']:.4f} | Local SGD step complete"
+                ep_line = f"[{t_str}] [{client.name}] [SGD_STEP] Epoch {ep_info['epoch']}/{local_epochs}: Batch Loss = {ep_info['loss']:.4f} | Local SGD step complete"
                 node_logs[client.client_id].append(ep_line)
                 execution_logs.append(ep_line)
 
             loss_b = local_res["eval_before"]["loss"]
             loss_a = local_res["eval_after"]["loss"]
             acc_g = local_res["accuracy_gain"] * 100
-            log_msg(client.name, f"✅ Local training complete! Loss: {loss_b:.4f} -> {loss_a:.4f} (Accuracy gain: +{acc_g:.1f}%)")
-            log_msg(client.name, f"Calculated weight delta update: L2 Norm = {local_res['delta_norm']:.4f} | Hash = {local_res['update_hash'][:16]}...")
+            log_msg(client.name, f"[TRAIN_COMPLETE] Local training complete! Loss: {loss_b:.4f} -> {loss_a:.4f} (Accuracy gain: +{acc_g:.1f}%)")
+            log_msg(client.name, f"[WEIGHT_UPDATE] Calculated weight delta update: L2 Norm = {local_res['delta_norm']:.4f} | Hash = {local_res['update_hash'][:16]}...")
 
             # zkML Proof Generation
-            log_msg(client.name, f"🛡️ [zkML Prover] Compiling ONNX witness into Halo2 KZG arithmetic circuit (14,208 constraints)...")
+            log_msg(client.name, f"[ZKML_PROVER] Compiling ONNX witness into Halo2 KZG arithmetic circuit (14,208 constraints)...")
             proof_bundle = self.zkml_engine.generate_proof(
                 base_model_hash=base_hash,
                 update_hash=local_res["update_hash"],
@@ -250,13 +353,13 @@ class NetworkOrchestrator:
                 sample_input=local_res["sample_witness_input"][0],
                 sample_output=local_res["sample_witness_output"][0],
             )
-            log_msg(client.name, f"🛡️ [zkML Prover] Proof generated successfully! Proof hash: {proof_bundle['proof_hash'][:16]}...")
+            log_msg(client.name, f"[ZKML_PROVER] Proof generated successfully! Proof hash: {proof_bundle['proof_hash'][:16]}...")
 
             # Check if simulation requested a corrupted proof for this node
             is_corrupt = (simulate_corrupt_proof_node == client_id)
             if is_corrupt:
                 proof_bundle["proof_hex"] = proof_bundle["proof_hex"][:-8] + "00000000"
-                log_msg(client.name, f"⚠️ [Fault Injection] Injected corrupted proof payload for Byzantine test.")
+                log_msg(client.name, f"[FAULT_INJECTION] Injected corrupted proof payload for Byzantine test.")
 
             # Verify proof (Simulating Arbitrum ZKVerifier.sol contract execution)
             is_valid, verify_msg = self.zkml_engine.verify_proof(
@@ -268,7 +371,7 @@ class NetworkOrchestrator:
             )
 
             # Step 3: Arbitrum ContributionRegistry submission
-            log_msg("Arbitrum", f"Verifying proof for {client.name} on ZKVerifier.sol & ContributionRegistry.sol...")
+            log_msg("Arbitrum", f"[VERIFY_SUBMIT] Verifying proof for {client.name} on ZKVerifier.sol & ContributionRegistry.sol...")
             arb_ok, arb_evt = self.arbitrum.submit_contribution(
                 contributor=client.wallet_address,
                 model_id=self.model_id,
@@ -281,14 +384,14 @@ class NetworkOrchestrator:
             )
             arbitrum_events.append(arb_evt)
             if is_valid and arb_ok:
-                log_msg("Arbitrum", f"✅ Proof VALID: Pairing check passed. Event ContributionVerified emitted (Tx: {arb_evt.get('tx_hash', '')[:16]}...)")
+                log_msg("Arbitrum", f"[PAIRING_VALID] Proof VALID: Pairing check passed. Event ContributionVerified emitted (Tx: {arb_evt.get('tx_hash', '')[:16]}...)")
             else:
-                log_msg("Arbitrum", f"❌ Proof REJECTED: Constraint mismatch. Contribution disallowed.")
+                log_msg("Arbitrum", f"[PAIRING_REJECT] Proof REJECTED: Constraint mismatch. Contribution disallowed.")
 
             # Step 4: Cross-Chain Relayer -> Solana Program Execution
             sol_result = {"success": False, "reward_amount": 0.0, "tx_signature": None}
             if is_valid and arb_ok:
-                log_msg("Relayer", f"Cross-Chain Relayer forwarding Arbitrum verification event to Solana Program...")
+                log_msg("Relayer", f"[BRIDGE_FORWARD] Cross-Chain Relayer forwarding Arbitrum verification event to Solana Program...")
                 sol_result = self.solana.process_arbitrum_verified_contribution(
                     contributor=client.wallet_address,
                     model_id=self.model_id,
@@ -298,7 +401,7 @@ class NetworkOrchestrator:
                 )
                 reward_tokens = sol_result.get("reward_amount", 0.0)
                 tx_sig = sol_result.get("tx_signature", "")
-                log_msg("Solana", f"💰 Reward disbursed to {client.name}: {reward_tokens:.3f} SOL tokens (Signature: {tx_sig[:18]}...)")
+                log_msg("Solana", f"[REWARD_DISBURSED] Reward disbursed to {client.name}: {reward_tokens:.3f} SOL tokens (Signature: {tx_sig[:18]}...)")
             solana_payouts.append(sol_result)
 
             # Track client update status for aggregator
@@ -321,14 +424,14 @@ class NetworkOrchestrator:
             })
 
         # Step 5: Robust FedAvg Aggregation (Norm clipping & outlier rejection)
-        log_msg("Aggregator", f"⚖️ Robust FedAvg aggregation initiated over {len(client_updates)} update vectors...")
+        log_msg("Aggregator", f"[FEDAVG_INIT] Robust FedAvg aggregation initiated over {len(client_updates)} update vectors...")
         agg_result = self.fl_coordinator.aggregator.aggregate(
             base_weights=base_weights, client_updates=client_updates
         )
-        log_msg("Aggregator", f"🛡️ Byzantine defenses applied: L2 norm clipping (threshold: 4.0) & Euclidean distance outlier rejection.")
-        log_msg("Aggregator", f"✅ Accepted nodes for consensus: {', '.join(agg_result['accepted_clients'])}")
+        log_msg("Aggregator", f"[BYZANTINE_DEFENSE] Byzantine defenses applied: L2 norm clipping (threshold: 4.0) & Euclidean distance outlier rejection.")
+        log_msg("Aggregator", f"[CONSENSUS_ACCEPTED] Accepted nodes for consensus: {', '.join(agg_result['accepted_clients'])}")
         if agg_result['rejected_clients']:
-            log_msg("Aggregator", f"⚠️ Filtered out deviating nodes: {', '.join(agg_result['rejected_clients'])}")
+            log_msg("Aggregator", f"[OUTLIER_REJECTED] Filtered out deviating nodes: {', '.join(agg_result['rejected_clients'])}")
 
         # Step 6: Update global model weights
         self.fl_coordinator.current_round = round_number
@@ -339,8 +442,8 @@ class NetworkOrchestrator:
         )
         storage_cid = f"ipfs://bafybeic{new_hash[:24]}"
         acc_delta = eval_after["accuracy"] - eval_before["accuracy"]
-        log_msg("Coordinator", f"🌟 Global Model updated! Accuracy: {eval_before['accuracy']*100:.2f}% -> {eval_after['accuracy']*100:.2f}% (+{acc_delta*100:.2f}%)")
-        log_msg("Coordinator", f"New Global Model SHA-256 Hash: {new_hash}")
+        log_msg("Coordinator", f"[GLOBAL_MODEL_UPDATE] Global Model updated! Accuracy: {eval_before['accuracy']*100:.2f}% -> {eval_after['accuracy']*100:.2f}% (+{acc_delta*100:.2f}%)")
+        log_msg("Coordinator", f"[MODEL_HASH] New Global Model SHA-256 Hash: {new_hash}")
 
         # Step 7: Record round completion in Arbitrum ModelRegistry.sol
         arb_round_evt = self.arbitrum.record_round_completion(
@@ -351,8 +454,8 @@ class NetworkOrchestrator:
             storage_cid=storage_cid,
             total_contributions=len(agg_result["accepted_clients"]),
         )
-        log_msg("Arbitrum", f"📦 ModelRegistry.sol updated on-chain. Storage CID: {storage_cid} (Tx: {arb_round_evt.get('tx_hash', '')[:16]}...)")
-        log_msg("Coordinator", f"🎉 Round #{round_number} complete! {len(agg_result['accepted_clients'])} nodes rewarded. ZERO raw data uploaded.")
+        log_msg("Arbitrum", f"[MODEL_REGISTRY] ModelRegistry.sol updated on-chain. Storage CID: {storage_cid} (Tx: {arb_round_evt.get('tx_hash', '')[:16]}...)")
+        log_msg("Coordinator", f"[ROUND_COMPLETE] Round #{round_number} complete! {len(agg_result['accepted_clients'])} nodes rewarded. ZERO raw data uploaded.")
 
         # Step 8: Persist all round metadata in Database
         try:
@@ -455,6 +558,9 @@ class NetworkOrchestrator:
             db.commit()
         finally:
             db.close()
+
+        self.last_round_logs = node_logs
+        self.last_round_number = round_number
 
         return {
             "round_id": round_number,

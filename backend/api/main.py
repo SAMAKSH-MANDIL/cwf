@@ -184,6 +184,7 @@ class RunRoundRequest(BaseModel):
     epochs: int = 4
     learning_rate: float = 0.03
     simulate_corrupted_proof: Optional[str] = None
+    active_node_ids: Optional[List[str]] = None
 
 
 @app.post("/api/training/run-round")
@@ -197,8 +198,18 @@ def run_live_round(payload: RunRoundRequest = RunRoundRequest()):
         local_epochs=payload.epochs,
         learning_rate=payload.learning_rate,
         simulate_corrupt_proof_node=payload.simulate_corrupted_proof,
+        active_node_ids=payload.active_node_ids,
     )
     return result
+
+
+@app.get("/api/training/latest-round-logs")
+def get_latest_round_logs():
+    """Returns the most recent round's live node execution logs for multi-device sync."""
+    return {
+        "round_number": getattr(orchestrator, "last_round_number", 0),
+        "node_logs": getattr(orchestrator, "last_round_logs", {}),
+    }
 
 
 # -------------------------------------------------------------
@@ -348,6 +359,25 @@ def register_device(payload: RegisterDeviceRequest):
         wallet_address=payload.wallet_address,
     )
     return result
+
+
+class DeleteDeviceRequest(BaseModel):
+    identifier: str
+
+
+@app.post("/api/devices/delete")
+@app.delete("/api/providers/{identifier}")
+def delete_device(identifier: Optional[str] = None, payload: Optional[DeleteDeviceRequest] = None):
+    """
+    Deactivates and removes an edge node/device from the network,
+    coordinator client list, Solana registry, and persistent DB.
+    """
+    target = identifier or (payload.identifier if payload else None)
+    if not target or not target.strip():
+        raise HTTPException(status_code=400, detail="Device identifier required")
+
+    orchestrator.remove_device(target)
+    return {"success": True, "deleted": target}
 
 
 # -------------------------------------------------------------

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Server, Cpu, CheckCircle2, ShieldCheck, Coins, Activity, HardDrive, Zap, ExternalLink, PlusCircle, X, Check } from "lucide-react";
+import { Server, Cpu, CheckCircle2, ShieldCheck, Coins, Activity, HardDrive, Zap, ExternalLink, PlusCircle, X, Check, Trash2 } from "lucide-react";
 
 export default function ProvidersPage() {
   const [providers, setProviders] = useState<any[]>([]);
@@ -33,6 +33,26 @@ export default function ProvidersPage() {
       });
   };
 
+  const handleDeleteProvider = async (p: any) => {
+    if (!confirm(`Are you sure you want to remove node "${p.device_name}" from the network?`)) return;
+    try {
+      await fetch("/api/devices/delete", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ identifier: p.wallet_address || p.device_name }),
+      });
+      if (typeof window !== "undefined") {
+        const saved = localStorage.getItem("fedzero_device_node");
+        if (saved && p.device_name.toLowerCase().includes(saved.toLowerCase())) {
+          localStorage.removeItem("fedzero_device_node");
+        }
+      }
+      loadProviders();
+    } catch (err) {
+      console.error("Failed to delete provider", err);
+    }
+  };
+
   useEffect(() => {
     loadProviders();
   }, []);
@@ -56,6 +76,13 @@ export default function ProvidersPage() {
       });
 
       if (res.ok) {
+        const data = await res.json();
+        if (typeof window !== "undefined") {
+          localStorage.setItem("fedzero_device_node", nodeForm.name);
+          if (data.wallet_address) {
+            localStorage.setItem("fedzero_device_wallet", data.wallet_address);
+          }
+        }
         setRegSuccess(true);
         loadProviders();
         setTimeout(() => {
@@ -241,9 +268,19 @@ export default function ProvidersPage() {
             </div>
 
             {/* Card Action footer */}
-            <div className="pt-1 flex items-center justify-between">
-              <span className="text-[10px] font-mono text-[#1C1917]/50">TEE Attested • Intel SGX</span>
+            <div className="pt-2 flex items-center justify-between border-t border-[#1C1917]/15">
               <button
+                type="button"
+                onClick={() => handleDeleteProvider(p)}
+                className="px-2.5 py-1 bg-red-50 hover:bg-red-600 hover:text-white text-red-600 border border-red-300 hover:border-red-600 text-[11px] font-mono font-bold uppercase transition-all flex items-center space-x-1.5 cursor-pointer rounded"
+                title="Remove Node from Network"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                <span>Remove</span>
+              </button>
+
+              <button
+                type="button"
                 onClick={() => alert(`Node ${p.device_name} Telemetry: Latency 14ms | Memory Utilization 42% | Enclave Verified`)}
                 className="px-3 py-1 bg-[#FAF7F2] hover:bg-white text-[#1C1917] border border-[#1C1917] text-[11px] font-mono font-bold uppercase transition-colors cursor-pointer"
               >

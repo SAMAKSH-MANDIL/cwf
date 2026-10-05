@@ -91,6 +91,27 @@ class SolanaRewardService:
         self.providers[norm_addr] = record
         return record
 
+    def remove_provider(self, identifier: str) -> bool:
+        """Removes or deactivates a provider by wallet address or device name."""
+        norm_id = identifier.lower().strip()
+        deleted = False
+        if norm_id in self.providers:
+            del self.providers[norm_id]
+            deleted = True
+        for key, p in list(self.providers.items()):
+            w_addr = (p.get("wallet_address") or "").lower()
+            d_name = (p.get("device_name") or "").lower()
+            if (
+                w_addr == norm_id
+                or d_name == norm_id
+                or norm_id in d_name
+                or norm_id in w_addr
+            ):
+                if key in self.providers:
+                    del self.providers[key]
+                deleted = True
+        return deleted
+
     def calculate_reward(
         self,
         quality_score: float,       # 0.0 to 1.0 (loss reduction metric)
@@ -127,13 +148,24 @@ class SolanaRewardService:
         Invoked by the Cross-Chain Relayer when Arbitrum emits `ContributionVerified`.
         Dispatches Solana transaction, computes incentive reward, and updates provider state.
         """
-        norm_addr = contributor.lower()
-        if norm_addr not in self.providers:
-            # Auto-register if first time
-            self.register_provider(contributor, f"Device {contributor[:8]}", "T4", 16)
+        norm_addr = contributor.lower().strip()
+        provider = self.providers.get(norm_addr)
+        if not provider:
+            for p in self.providers.values():
+                if (
+                    (p.get("wallet_address") or "").lower() == norm_addr
+                    or (p.get("device_name") or "").lower() == norm_addr
+                ):
+                    provider = p
+                    break
 
-        provider = self.providers[norm_addr]
-        tier = provider["hardware_tier"]
+        if not provider:
+            return {
+                "success": False,
+                "error": f"Provider {contributor} is not registered in Solana network.",
+            }
+
+        tier = provider.get("hardware_tier", "T4")
 
         # Anti-Sybil rate limit check: Ensure unique contribution per round
         contrib_key = f"{norm_addr}_{model_id}_{round_id}"
