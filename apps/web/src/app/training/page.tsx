@@ -34,7 +34,8 @@ import {
   Split,
   Binary,
   BarChart2,
-  Target
+  Target,
+  Download
 } from "lucide-react";
 
 // Synthetic Dataset Presets with Detailed Column Statistics for Table View
@@ -1354,6 +1355,37 @@ export default function TrainingPage() {
               <Sliders className="w-3.5 h-3.5" />
               <span>Manual Allocation</span>
             </button>
+          </div>
+        </div>
+
+        {/* Real Hardware Daemon Connection Strip */}
+        <div className="flex flex-col sm:flex-row items-center justify-between gap-3 p-3.5 bg-emerald-50/80 border-2 border-emerald-600 rounded-xl font-mono text-xs">
+          <div className="flex items-center space-x-2.5">
+            <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-ping shrink-0" />
+            <span className="text-emerald-950 font-bold">
+              Run Real SGD on a Physical Laptop:
+            </span>
+            <span className="text-emerald-800 text-[11px] hidden md:inline">
+              Download the zero-dependency Python worker daemon to run hardware backpropagation on any 2nd laptop.
+            </span>
+          </div>
+          <div className="flex items-center space-x-2 shrink-0">
+            <a
+              href="/fedzero_worker.py"
+              download="fedzero_worker.py"
+              className="px-3 py-1.5 bg-emerald-700 hover:bg-emerald-800 text-white rounded text-[11px] font-black border border-emerald-900 shadow-sm flex items-center space-x-1.5"
+            >
+              <Download className="w-3.5 h-3.5" />
+              <span>Worker (.py)</span>
+            </a>
+            <a
+              href="/run_worker.bat"
+              download="run_worker.bat"
+              className="px-3 py-1.5 bg-[#1C1917] hover:bg-[#2D2A26] text-white rounded text-[11px] font-black border border-[#1C1917] shadow-sm flex items-center space-x-1.5"
+            >
+              <Download className="w-3.5 h-3.5" />
+              <span>1-Click (.bat)</span>
+            </a>
           </div>
         </div>
 

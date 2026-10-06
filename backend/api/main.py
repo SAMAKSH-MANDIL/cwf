@@ -16,6 +16,7 @@ import os
 from typing import Dict, List, Any, Optional
 from fastapi import FastAPI, Depends, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
@@ -378,6 +379,54 @@ def delete_device(identifier: Optional[str] = None, payload: Optional[DeleteDevi
 
     orchestrator.remove_device(target)
     return {"success": True, "deleted": target}
+
+
+# -------------------------------------------------------------
+# Native Edge Worker Daemon APIs (Cross-Platform Distributed Compute)
+# -------------------------------------------------------------
+class WorkerRegisterRequest(BaseModel):
+    name: str
+    hardware_tier: str = "GTX 1650/RTX 3050"
+    vram_gb: int = 6
+    samples_count: int = 120
+    wallet_address: Optional[str] = None
+
+
+@app.post("/api/worker/register")
+def register_worker(payload: WorkerRegisterRequest):
+    """Registers a real external worker daemon (Laptop 2 / Mac / Linux)."""
+    return orchestrator.register_worker_daemon(
+        node_name=payload.name,
+        hardware_tier=payload.hardware_tier,
+        vram_gb=payload.vram_gb,
+        samples_count=payload.samples_count,
+        wallet_address=payload.wallet_address,
+    )
+
+
+@app.get("/api/worker/poll-job")
+def poll_worker_job(identifier: str = "LOQ_Vinu", wallet: Optional[str] = None):
+    """Polls for pending federated round training jobs for a worker node."""
+    return orchestrator.get_worker_job(identifier=identifier, wallet=wallet)
+
+
+@app.post("/api/worker/submit-update")
+def submit_worker_update(payload: Dict[str, Any]):
+    """Receives locally computed weight updates and loss metrics from external worker."""
+    return orchestrator.submit_worker_update(payload)
+
+
+@app.get("/api/worker/download")
+def download_worker_script():
+    """Serves the standalone fedzero_worker.py for external client download."""
+    script_path = os.path.abspath("fedzero_worker.py")
+    if not os.path.exists(script_path):
+        raise HTTPException(status_code=404, detail="fedzero_worker.py not found on coordinator")
+    return FileResponse(
+        path=script_path,
+        filename="fedzero_worker.py",
+        media_type="text/x-python",
+    )
 
 
 # -------------------------------------------------------------
