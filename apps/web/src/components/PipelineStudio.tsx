@@ -168,6 +168,19 @@ export default function PipelineStudio({
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
+          <a
+            href="/api/worker/download"
+            download="fedzero_worker.py"
+            className={`px-3 py-2 rounded-xl text-xs font-mono font-bold flex items-center space-x-1.5 border-2 transition-all hover:scale-102 ${
+              isRetro
+                ? "bg-[#FAF7F2] border-[#1C1917] text-[#1C1917] hover:bg-[#F2ECE1]"
+                : "bg-slate-800 border-slate-700 text-slate-200 hover:bg-slate-700"
+            }`}
+          >
+            <Download className="w-3.5 h-3.5 text-emerald-500" />
+            <span>Download fedzero_worker.py</span>
+          </a>
+
           <button
             onClick={handleDownload}
             className={`px-3 py-2 rounded-xl text-xs font-mono font-bold flex items-center space-x-1.5 border-2 transition-all hover:scale-102 ${
@@ -176,9 +189,10 @@ export default function PipelineStudio({
                 : "bg-slate-800 border-slate-700 text-slate-200 hover:bg-slate-700"
             }`}
           >
-            <Download className="w-3.5 h-3.5" />
+            <Download className="w-3.5 h-3.5 text-[#E05338]" />
             <span>Download pipeline.py</span>
           </button>
+
 
           <button
             onClick={handleDeployPipeline}

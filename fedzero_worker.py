@@ -19,10 +19,43 @@ import argparse
 import urllib.request
 import urllib.error
 import importlib.util
+import subprocess
+
+# ------------------------------------------------------------------------------
+# Auto-Dependency Manager: Automatically installs missing packages on launch
+# ------------------------------------------------------------------------------
+def ensure_dependencies():
+    """
+    Auto-detects and installs missing packages (numpy) so the edge node
+    runs out-of-the-box with zero manual setup.
+    """
+    missing = []
+    try:
+        import numpy
+    except ImportError:
+        missing.append("numpy")
+
+    if missing:
+        print("=" * 72)
+        print("  FEDZERO AUTO-BOOTSTRAP: Initializing Edge Node Environment...")
+        print(f"  Installing missing required packages automatically: {', '.join(missing)}")
+        print("=" * 72)
+        try:
+            subprocess.check_call(
+                [sys.executable, "-m", "pip", "install", *missing],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+            print("  [AUTO-BOOTSTRAP] SUCCESS! Dependencies ready.\n")
+        except Exception as e:
+            print(f"  [AUTO-BOOTSTRAP] Notice: {e}. Running in pure Python mode.\n")
+
+ensure_dependencies()
 
 # ------------------------------------------------------------------------------
 # Backend Auto-Detection: PyTorch GPU > NumPy > Pure Python
 # ------------------------------------------------------------------------------
+
 BACKEND = "pure_python"
 torch = None
 np = None

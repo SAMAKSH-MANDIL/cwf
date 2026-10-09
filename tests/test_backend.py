@@ -128,7 +128,15 @@ class TestBackendAPI(unittest.TestCase):
         self.assertEqual(dl_resp.status_code, 200)
         self.assertIn("Custom Edge Model", dl_resp.text)
 
+    def test_worker_download(self):
+        """Worker script fedzero_worker.py must be downloadable via /api/worker/download."""
+        resp = self.client.get("/api/worker/download")
+        self.assertEqual(resp.status_code, 200)
+        self.assertIn("FEDZERO DECENTRALIZED VERIFIABLE AI NETWORK", resp.text)
+        self.assertIn("ensure_dependencies", resp.text)
+
 
 if __name__ == "__main__":
     unittest.main()
+
 

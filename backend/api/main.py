@@ -656,3 +656,13 @@ def download_pipeline_file():
     return FileResponse(path=p_path, filename="pipeline.py", media_type="text/x-python")
 
 
+@app.get("/api/worker/download")
+def download_worker_script():
+    """Serves fedzero_worker.py directly for edge nodes downloading from the web dashboard."""
+    worker_path = os.path.abspath("fedzero_worker.py")
+    if not os.path.exists(worker_path):
+        raise HTTPException(status_code=404, detail="fedzero_worker.py not found on coordinator")
+    return FileResponse(path=worker_path, filename="fedzero_worker.py", media_type="text/x-python")
+
+
+

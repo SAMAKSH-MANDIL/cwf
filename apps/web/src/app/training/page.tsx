@@ -1056,7 +1056,16 @@ export default function TrainingPage() {
           </p>
         </div>
 
-        <div className="z-10 flex items-center space-x-3 text-xs font-mono">
+        <div className="z-10 flex flex-wrap items-center gap-3 text-xs font-mono">
+          <a
+            href="/api/worker/download"
+            download="fedzero_worker.py"
+            className="p-3 rounded-xl bg-[#1C1917] hover:bg-[#333] text-white border-2 border-[#1C1917] retro-shadow-sm flex items-center space-x-2 font-bold transition-all hover:scale-102"
+            title="Download native edge worker python script to connect any laptop/PC"
+          >
+            <Download className="w-4 h-4 text-emerald-400" />
+            <span>Download Worker (fedzero_worker.py)</span>
+          </a>
           <div className="p-3 rounded-xl bg-[#FAF7F2] border-2 border-[#1C1917] retro-shadow-sm flex items-center space-x-2.5">
             <span className={`w-2.5 h-2.5 rounded-full ${wsStatus === "connected" ? "bg-emerald-500 animate-pulse" : wsStatus === "connecting" ? "bg-amber-500 animate-ping" : "bg-red-500"}`}></span>
             <span className="font-bold text-[#1C1917]">
