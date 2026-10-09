@@ -96,9 +96,20 @@ class ImageDatasetProcessor:
         labels_map = {}
         thumbnails = []
 
+        valid_exts = (".png", ".jpg", ".jpeg", ".bmp", ".webp", ".tiff", ".tif")
         for fname, raw_bytes in files_data:
-            base = os.path.splitext(os.path.basename(fname))[0]
-            raw_label = base.split("_")[0] if "_" in base else "sample"
+            clean_name = fname.replace("\\", "/").strip("/")
+            if not any(clean_name.lower().endswith(ext) for ext in valid_exts):
+                continue
+            if "/__MACOSX" in clean_name or clean_name.startswith("."):
+                continue
+
+            parts = clean_name.split("/")
+            if len(parts) > 1:
+                raw_label = parts[-2]
+            else:
+                base = os.path.splitext(parts[0])[0]
+                raw_label = base.split("_")[0] if "_" in base else "class_0"
 
             if raw_label not in labels_map:
                 labels_map[raw_label] = len(labels_map)
