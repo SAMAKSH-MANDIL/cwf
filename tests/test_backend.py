@@ -85,6 +85,50 @@ class TestBackendAPI(unittest.TestCase):
             pong_frame = ws.receive_json()
             self.assertEqual(pong_frame["event"], "PONG")
 
+    def test_dataset_upload_stream(self):
+        """Streaming multipart dataset upload must parse headers and store file."""
+        csv_content = b"feature1,feature2,feature3,label\n1.0,2.0,3.0,1\n4.0,5.0,6.0,0\n7.0,8.0,9.0,1\n"
+        response = self.client.post(
+            "/api/datasets/upload",
+            files={"file": ("test_hospital_data.csv", csv_content, "text/csv")}
+        )
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertTrue(data["success"])
+        self.assertEqual(data["filename"], "test_hospital_data.csv")
+        self.assertEqual(data["total_rows"], 3)
+        self.assertIn("feature1", data["headers"])
+        self.assertIn("label", data["headers"])
+
+    def test_pipeline_management(self):
+        """Pipeline endpoints must return templates, active code, and accept custom scripts."""
+        # 1. Templates
+        t_resp = self.client.get("/api/pipeline/templates")
+        self.assertEqual(t_resp.status_code, 200)
+        templates = t_resp.json()
+        self.assertGreaterEqual(len(templates), 3)
+
+        # 2. Current pipeline
+        c_resp = self.client.get("/api/pipeline/current")
+        self.assertEqual(c_resp.status_code, 200)
+        self.assertIn("code", c_resp.json())
+
+        # 3. Deploy custom pipeline
+        custom_code = "# Custom Edge Model\ndef load_local_dataset(p):\n    return [[1,2]], [0]\ndef train_step(m, X, y, e, lr):\n    return m, [{'epoch': 1, 'loss': 0.1}]\n"
+        d_resp = self.client.post("/api/pipeline/deploy", json={
+            "code": custom_code,
+            "template_key": "custom",
+            "model_name": "EdgeCustomNet"
+        })
+        self.assertEqual(d_resp.status_code, 200)
+        self.assertTrue(d_resp.json()["success"])
+
+        # 4. Download pipeline
+        dl_resp = self.client.get("/api/pipeline/download")
+        self.assertEqual(dl_resp.status_code, 200)
+        self.assertIn("Custom Edge Model", dl_resp.text)
+
 
 if __name__ == "__main__":
     unittest.main()
+

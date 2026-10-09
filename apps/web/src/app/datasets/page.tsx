@@ -21,17 +21,21 @@ import {
   Plus,
   Trash2,
   Network,
-  Zap
+  Zap,
+  Code2
 } from "lucide-react";
+import LargeFileUploader, { UploadResult } from "@/components/LargeFileUploader";
+import PipelineStudio from "@/components/PipelineStudio";
 
 export default function DatasetsPage() {
   const [presets, setPresets] = useState<any[]>([]);
-  const [activeTab, setActiveTab] = useState<"presets" | "custom">("presets");
+  const [activeTab, setActiveTab] = useState<"presets" | "custom" | "pipeline">("presets");
   const [selectedPresetKey, setSelectedPresetKey] = useState<string>("heart_disease_uci");
 
   // Custom CSV State
   const [customCsvText, setCustomCsvText] = useState<string>("");
   const [activeCsv, setActiveCsv] = useState<string>("");
+
 
   // Profiler State
   const [loadingProfile, setLoadingProfile] = useState<boolean>(false);
@@ -135,6 +139,22 @@ export default function DatasetsPage() {
       }
     };
     reader.readAsText(file);
+  };
+
+  const handleLargeUploadSuccess = (result: UploadResult) => {
+    setActiveTab("custom");
+    setActiveCsv(result.preview_text);
+    setCustomCsvText(result.preview_text);
+    setLoadingProfile(true);
+    fetch("/api/datasets/profile", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ csv_text: result.preview_text }),
+    })
+      .then((r) => r.json())
+      .then((data) => applyProfile(data, result.preview_text, result.filename.replace(".csv", "")))
+      .catch((e) => console.error("Error profiling uploaded dataset", e))
+      .finally(() => setLoadingProfile(false));
   };
 
   const applyProfile = (data: any, csv: string, baseName: string) => {
@@ -347,9 +367,26 @@ export default function DatasetsPage() {
           }`}
         >
           <FileText className="w-4 h-4" />
-          <span>Upload or Paste Custom CSV</span>
+          <span>Large File Upload & CSV</span>
+        </button>
+
+        <button
+          onClick={() => setActiveTab("pipeline")}
+          className={`px-4 py-2 rounded-xl flex items-center space-x-2 transition-all ${
+            activeTab === "pipeline"
+              ? "bg-purple-500/20 text-purple-300 border border-purple-500/40 font-bold"
+              : "text-slate-400 hover:text-white hover:bg-slate-800/40"
+          }`}
+        >
+          <Code2 className="w-4 h-4 text-purple-400" />
+          <span>Python Pipeline Studio (Custom Code)</span>
         </button>
       </div>
+
+      {/* Pipeline Studio Tab View */}
+      {activeTab === "pipeline" && (
+        <PipelineStudio variant="cyber" serverHost="http://localhost:8000" />
+      )}
 
       {/* Preset Cards Grid */}
       {activeTab === "presets" && (
@@ -388,30 +425,34 @@ export default function DatasetsPage() {
         </div>
       )}
 
-      {/* Custom CSV Paste Box */}
+      {/* Custom CSV Paste & Large File Uploader Box */}
       {activeTab === "custom" && (
-        <div className="p-6 rounded-3xl glass-panel border border-slate-800 space-y-4">
-          <div className="flex items-center justify-between">
-            <h3 className="text-sm font-bold text-white font-mono flex items-center space-x-2">
-              <FileText className="w-4 h-4 text-cyan-400" />
-              <span>Paste Raw CSV Data or Drag & Drop File Above</span>
-            </h3>
-            <button
-              onClick={handleProfileCustomCsv}
-              disabled={loadingProfile || !customCsvText.trim()}
-              className="px-5 py-2 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold text-xs flex items-center space-x-1.5 transition-all disabled:opacity-50"
-            >
-              {loadingProfile ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
-              <span>Inspect & Profile Dataset</span>
-            </button>
+        <div className="space-y-6">
+          <LargeFileUploader variant="cyber" onUploadSuccess={handleLargeUploadSuccess} />
+
+          <div className="p-6 rounded-3xl glass-panel border border-slate-800 space-y-4">
+            <div className="flex items-center justify-between">
+              <h3 className="text-sm font-bold text-white font-mono flex items-center space-x-2">
+                <FileText className="w-4 h-4 text-cyan-400" />
+                <span>Or Paste Raw CSV Data to Profile</span>
+              </h3>
+              <button
+                onClick={handleProfileCustomCsv}
+                disabled={loadingProfile || !customCsvText.trim()}
+                className="px-5 py-2 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold text-xs flex items-center space-x-1.5 transition-all disabled:opacity-50"
+              >
+                {loadingProfile ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
+                <span>Inspect & Profile Dataset</span>
+              </button>
+            </div>
+            <textarea
+              value={customCsvText}
+              onChange={(e) => setCustomCsvText(e.target.value)}
+              rows={5}
+              placeholder="age,sex,blood_pressure,cholesterol,diagnosis&#10;54,Male,130,240,1&#10;48,Female,120,180,0&#10;..."
+              className="w-full bg-[#050811] border border-slate-800 rounded-2xl p-4 font-mono text-xs text-slate-300 focus:outline-none focus:border-cyan-500/50"
+            />
           </div>
-          <textarea
-            value={customCsvText}
-            onChange={(e) => setCustomCsvText(e.target.value)}
-            rows={5}
-            placeholder="age,sex,blood_pressure,cholesterol,diagnosis&#10;54,Male,130,240,1&#10;48,Female,120,180,0&#10;..."
-            className="w-full bg-[#050811] border border-slate-800 rounded-2xl p-4 font-mono text-xs text-slate-300 focus:outline-none focus:border-cyan-500/50"
-          />
         </div>
       )}
 

@@ -37,8 +37,11 @@ import {
   Target,
   Download
 } from "lucide-react";
+import LargeFileUploader, { UploadResult } from "@/components/LargeFileUploader";
+import PipelineStudio from "@/components/PipelineStudio";
 
 // Synthetic Dataset Presets with Detailed Column Statistics for Table View
+
 const SYNTHETIC_DATASETS = [
   {
     id: "healthcare",
@@ -294,6 +297,19 @@ export default function TrainingPage() {
     };
     reader.readAsText(file);
   };
+
+  const handleLargeUploadSuccess = (result: UploadResult) => {
+    if (result.preview_text) {
+      setCustomCsvText(result.preview_text);
+      if (result.headers && result.headers.length > 0) {
+        const lastCol = result.headers[result.headers.length - 1];
+        setSelectedTarget(lastCol);
+        setSelectedFeatures(result.headers.filter((c) => c !== lastCol));
+      }
+    }
+  };
+
+
 
   // =========================================================================
   // STEP 3: EDGE NODES STATE & CALIBRATION (EQUALLY SPLIT VS MANUAL)
@@ -1144,46 +1160,23 @@ export default function TrainingPage() {
           </div>
         ) : (
           /* Mode B: Custom CSV Upload & Enter */
-          <div className="space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-              <div className="p-6 rounded-xl border-2 border-dashed border-[#1C1917]/50 bg-[#F4EFE6] flex flex-col items-center justify-center text-center space-y-3 hover:border-[#1C1917] transition-all">
-                <div className="w-12 h-12 rounded-xl bg-[#FAF7F2] border-2 border-[#1C1917] flex items-center justify-center text-[#E05338] retro-shadow-sm">
-                  <Upload className="w-6 h-6" />
-                </div>
-                <div>
-                  <h4 className="font-display font-bold text-sm text-[#1C1917]">
-                    Upload Custom CSV
-                  </h4>
-                  <p className="text-xs text-[#78716C] font-mono mt-1">
-                    Select a CSV dataset with header row from your computer
-                  </p>
-                </div>
-                <label className="cursor-pointer px-4 py-2 rounded-lg bg-[#1C1917] text-white text-xs font-mono font-bold retro-shadow-sm hover:bg-[#333]">
-                  <span>Browse CSV File</span>
-                  <input
-                    type="file"
-                    accept=".csv,text/csv"
-                    onChange={handleFileUpload}
-                    className="hidden"
-                  />
-                </label>
-              </div>
+          <div className="space-y-6">
+            <LargeFileUploader variant="retro" onUploadSuccess={handleLargeUploadSuccess} />
 
-              <div className="space-y-2 flex flex-col justify-between">
-                <label className="text-xs font-mono font-bold text-[#1C1917] uppercase flex items-center justify-between">
-                  <span>Or Paste CSV Plaintext:</span>
-                  <span className="text-[11px] text-[#2563EB] font-bold bg-[#FAF7F2] px-2 py-0.5 rounded border border-[#1C1917]/25">
-                    Parsed: {totalDatasetRecords} Data Rows
-                  </span>
-                </label>
-                <textarea
-                  rows={6}
-                  value={customCsvText}
-                  onChange={(e) => setCustomCsvText(e.target.value)}
-                  className="w-full p-3 rounded-xl bg-[#FAF7F2] border-2 border-[#1C1917] font-mono text-xs text-[#1C1917] focus:outline-none focus:ring-2 focus:ring-[#E05338]"
-                  placeholder="col1,col2,col3,target&#10;1,2,3,0&#10;4,5,6,1"
-                />
-              </div>
+            <div className="space-y-2">
+              <label className="text-xs font-mono font-bold text-[#1C1917] uppercase flex items-center justify-between">
+                <span>Or Paste / Edit CSV Plaintext:</span>
+                <span className="text-[11px] text-[#2563EB] font-bold bg-[#FAF7F2] px-2 py-0.5 rounded border border-[#1C1917]/25">
+                  Parsed: {totalDatasetRecords} Data Rows
+                </span>
+              </label>
+              <textarea
+                rows={5}
+                value={customCsvText}
+                onChange={(e) => setCustomCsvText(e.target.value)}
+                className="w-full p-3 rounded-xl bg-[#FAF7F2] border-2 border-[#1C1917] font-mono text-xs text-[#1C1917] focus:outline-none focus:ring-2 focus:ring-[#E05338]"
+                placeholder="col1,col2,col3,target&#10;1,2,3,0&#10;4,5,6,1"
+              />
             </div>
           </div>
         )}
@@ -1708,14 +1701,21 @@ export default function TrainingPage() {
       </section>
 
       {/* ========================================================================= */}
-      {/* 4. NEURAL NETWORK ARCHITECTURE & UNLIMITED HYPERPARAMETERS + LAUNCH CTA */}
+      {/* 4. PYTHON TRAINING PIPELINE STUDIO & DISTRIBUTED NOTEBOOK CODE */}
+      {/* ========================================================================= */}
+      <section className="space-y-3">
+        <PipelineStudio variant="retro" serverHost="http://localhost:8000" />
+      </section>
+
+      {/* ========================================================================= */}
+      {/* 5. NEURAL NETWORK ARCHITECTURE & UNLIMITED HYPERPARAMETERS + LAUNCH CTA */}
       {/* ========================================================================= */}
       <section className="p-7 rounded-2xl bg-[#FAF7F2] border-2 border-[#1C1917] retro-shadow space-y-6">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b-2 border-[#1C1917]/20 pb-4">
           <div className="space-y-1">
             <div className="flex items-center space-x-2.5">
               <span className="w-7 h-7 rounded-lg bg-[#9333EA] text-white font-mono font-black text-xs flex items-center justify-center border border-[#1C1917]">
-                04
+                05
               </span>
               <h2 className="text-xl font-black text-[#1C1917] font-display uppercase tracking-tight">
                 Neural Hidden Layers & Hyperparameters

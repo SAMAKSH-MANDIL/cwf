@@ -26,6 +26,10 @@ ENV/
 *.sqlite3
 storage/models/*.json
 !storage/models/.gitkeep
+storage/datasets/*
+!storage/datasets/.gitkeep
+storage/pipeline.py
+
 
 # Environment variables
 .env

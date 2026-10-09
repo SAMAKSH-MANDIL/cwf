@@ -16,7 +16,7 @@ import os
 import json
 import time
 from typing import Dict, List, Any, Optional
-from fastapi import FastAPI, Depends, HTTPException, Query, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, Depends, HTTPException, Query, WebSocket, WebSocketDisconnect, File, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
@@ -34,6 +34,7 @@ from backend.database.models import (
 )
 from backend.services.orchestrator import orchestrator
 from backend.services.websocket_manager import ws_manager
+from backend.services.pipeline_manager import pipeline_manager
 
 app = FastAPI(
     title="Decentralized Verifiable AI Network API",
@@ -555,4 +556,103 @@ def deploy_dataset(payload: DeployDatasetRequest):
         return result
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
+
+
+# -------------------------------------------------------------
+# Large File Upload API (Multipart Stream with Chunked Storage)
+# -------------------------------------------------------------
+@app.post("/api/datasets/upload")
+async def upload_dataset_file(file: UploadFile = File(...)):
+    """
+    Accepts large CSV / dataset file uploads via multipart stream.
+    Saves to storage/datasets, profiles structure, and returns metadata with row counts.
+    """
+    os.makedirs("storage/datasets", exist_ok=True)
+    clean_name = os.path.basename(file.filename or "dataset.csv").replace(" ", "_")
+    target_path = os.path.join("storage", "datasets", clean_name)
+
+    total_bytes = 0
+    chunk_size = 1024 * 1024  # 1MB chunk
+
+    with open(target_path, "wb") as f_out:
+        while chunk := await file.read(chunk_size):
+            total_bytes += len(chunk)
+            f_out.write(chunk)
+
+    total_rows = 0
+    headers = []
+    preview_rows = []
+    first_lines = []
+    try:
+        with open(target_path, "r", encoding="utf-8", errors="ignore") as f_in:
+            first_line = f_in.readline()
+            if first_line:
+                first_lines.append(first_line)
+                headers = [h.strip().replace('"', '').replace("'", "") for h in first_line.split(",") if h.strip()]
+            for line in f_in:
+                total_rows += 1
+                if len(preview_rows) < 8:
+                    first_lines.append(line)
+                    vals = [v.strip().replace('"', '').replace("'", "") for v in line.split(",")]
+                    preview_rows.append(vals)
+    except Exception:
+        pass
+
+    # Read preview text for profiler
+    preview_text = "".join(first_lines)
+
+    return {
+        "success": True,
+        "filename": clean_name,
+        "size_bytes": total_bytes,
+        "size_formatted": f"{total_bytes / (1024 * 1024):.2f} MB" if total_bytes >= 1024*1024 else f"{total_bytes / 1024:.1f} KB",
+        "total_rows": total_rows,
+        "headers": headers,
+        "preview_rows": preview_rows,
+        "preview_text": preview_text,
+        "storage_path": target_path,
+    }
+
+
+# -------------------------------------------------------------
+# Python Training Pipeline Studio APIs
+# -------------------------------------------------------------
+class DeployPipelineRequest(BaseModel):
+    code: str
+    template_key: Optional[str] = "custom"
+    model_name: Optional[str] = None
+
+
+@app.get("/api/pipeline/current")
+def get_current_pipeline():
+    """Returns currently deployed Python pipeline code for edge nodes."""
+    return pipeline_manager.get_active_pipeline()
+
+
+@app.get("/api/pipeline/templates")
+def get_pipeline_templates():
+    """Returns preset Python pipeline templates (Tabular, Vision CNN, PyTorch)."""
+    return pipeline_manager.get_templates()
+
+
+@app.post("/api/pipeline/deploy")
+def deploy_pipeline(payload: DeployPipelineRequest):
+    """Deploys a custom Python pipeline script to all edge nodes in the network."""
+    result = pipeline_manager.save_pipeline(payload.code, payload.template_key)
+    ws_manager.broadcast_sync("PIPELINE_UPDATED", {
+        "template_key": payload.template_key,
+        "model_name": payload.model_name or "CustomFederatedPipeline",
+        "updated_at": result["updated_at"],
+    })
+    return result
+
+
+@app.get("/api/pipeline/download")
+def download_pipeline_file():
+    """Serves pipeline.py for edge worker daemons."""
+    p_path = os.path.abspath(pipeline_manager.pipeline_file)
+    if not os.path.exists(p_path):
+        raise HTTPException(status_code=404, detail="pipeline.py not found on coordinator")
+    return FileResponse(path=p_path, filename="pipeline.py", media_type="text/x-python")
+
 

@@ -18,6 +18,7 @@ import json
 import argparse
 import urllib.request
 import urllib.error
+import importlib.util
 
 # ------------------------------------------------------------------------------
 # Backend Auto-Detection: PyTorch GPU > NumPy > Pure Python
@@ -314,6 +315,87 @@ def get_gpu_utilization():
 
 
 # ------------------------------------------------------------------------------
+# Dynamic Pipeline & Local Dataset Ingestion
+# ------------------------------------------------------------------------------
+def load_custom_pipeline(pipeline_path_or_url: str = None, server_url: str = None):
+    """
+    Loads custom Python pipeline script. Edge devices can edit this file locally!
+    If file doesn't exist, fetches active pipeline from coordinator as template.
+    """
+    local_path = pipeline_path_or_url
+    if not local_path or not os.path.exists(local_path):
+        candidate = "pipeline.py"
+        if os.path.exists(candidate):
+            local_path = candidate
+        elif server_url:
+            try:
+                print(f"[PIPELINE] Fetching active training pipeline from coordinator ({server_url})...")
+                dl_url = f"{server_url}/api/pipeline/download"
+                req = urllib.request.Request(dl_url, headers={"User-Agent": "FedZero-Worker/2.0"})
+                with urllib.request.urlopen(req, timeout=5) as resp:
+                    with open(candidate, "wb") as f_out:
+                        f_out.write(resp.read())
+                if os.path.exists(candidate):
+                    local_path = candidate
+                    print(f"[PIPELINE] Synchronized coordinator pipeline to '{candidate}'. Ready for local device edits.")
+            except Exception as e:
+                pass
+
+    if local_path and os.path.exists(local_path):
+        try:
+            spec = importlib.util.spec_from_file_location("edge_pipeline", local_path)
+            module = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(module)
+            print(f"[PIPELINE] Custom pipeline module '{local_path}' loaded into hardware enclave.")
+            return module
+        except Exception as e:
+            print(f"[PIPELINE_ERROR] Error loading '{local_path}': {e}. Using default architecture.")
+            return None
+    return None
+
+
+def load_edge_dataset(data_path, pipeline_mod, fallback_samples: int, seed: int):
+    """
+    Loads edge node's private dataset.
+    Uses pipeline.load_local_dataset() if present, or generic CSV reader.
+    """
+    if data_path and os.path.exists(data_path):
+        if pipeline_mod and hasattr(pipeline_mod, "load_local_dataset"):
+            try:
+                print(f"[DATASET] Invoking pipeline.load_local_dataset('{data_path}')...")
+                X, y = pipeline_mod.load_local_dataset(data_path)
+                print(f"[DATASET] Loaded {len(y)} records ({len(X[0]) if X else 0} features) from {data_path}")
+                return X, y
+            except Exception as e:
+                print(f"[DATASET_ERROR] Custom loader failed: {e}. Falling back to CSV parser.")
+
+        import csv
+        X, y = [], []
+        try:
+            with open(data_path, "r", encoding="utf-8", errors="ignore") as f:
+                reader = csv.reader(f)
+                header = next(reader, None)
+                for row in reader:
+                    if not row:
+                        continue
+                    try:
+                        feats = [float(v.strip()) for v in row[:-1]]
+                        lbl = int(float(row[-1].strip()))
+                        X.append(feats)
+                        y.append(lbl)
+                    except Exception:
+                        continue
+            if len(y) > 0:
+                print(f"[DATASET] Ingested {len(y)} private rows from '{data_path}' (Label: last column).")
+                return X, y
+        except Exception as e:
+            print(f"[DATASET_ERROR] CSV read failed: {e}")
+
+    print(f"[DATASET] Using isolated synthetic biomarker partition ({fallback_samples} samples).")
+    return generate_local_biomarkers(n_samples=fallback_samples, seed=seed)
+
+
+# ------------------------------------------------------------------------------
 # Main Worker Daemon Loop
 # ------------------------------------------------------------------------------
 def main():
@@ -326,6 +408,8 @@ def main():
     parser.add_argument("--samples",type=int, default=120,help="Local dataset sample count")
     parser.add_argument("--wallet", default=None,         help="Solana payout wallet address")
     parser.add_argument("--poll-interval", type=float, default=1.8, help="Poll interval in seconds")
+    parser.add_argument("--data-path", default=None,      help="Path to local private dataset CSV/file")
+    parser.add_argument("--pipeline",  default=None,      help="Path to local Python pipeline script")
     args = parser.parse_args()
 
     server_url = args.server.rstrip("/")
@@ -349,6 +433,10 @@ def main():
     print(f"  Compute Backend    : {backend_label()}")
     print(f"  Hardware Tier      : {hardware_tier} ({vram_gb} GB)")
     print(f"  Payout Wallet      : {wallet_address}")
+    if args.data_path:
+        print(f"  Private Data Path  : {args.data_path}")
+    if args.pipeline:
+        print(f"  Local Pipeline     : {args.pipeline}")
     print(f"  Operating System   : {sys.platform.upper()} (Native Execution)")
     print("=" * 72)
 
@@ -356,25 +444,24 @@ def main():
     if BACKEND == "pytorch_gpu":
         print(f"\n[GPU] CUDA device detected: {GPU_NAME}")
         print(f"[GPU] VRAM: {GPU_MEM} GB | CUDA version: {torch.version.cuda}")
-        # Warmup
         _w = torch.zeros(1, device=DEVICE)
         del _w
         print("[GPU] GPU warmup complete. Tensors will run on CUDA.")
     elif BACKEND == "pytorch_cpu":
         print("\n[INFO] PyTorch found but no CUDA GPU. Running on CPU.")
-        print("[INFO] To enable GPU: pip install torch --index-url https://download.pytorch.org/whl/cu121")
     elif BACKEND == "numpy_cpu":
         print("\n[INFO] NumPy detected. Running optimized CPU computation.")
-        print("[INFO] To enable GPU: pip install torch --index-url https://download.pytorch.org/whl/cu121")
     else:
         print("\n[INFO] Pure Python mode. Running on CPU.")
-        print("[INFO] To enable GPU: pip install torch --index-url https://download.pytorch.org/whl/cu121")
 
-    # Mount local dataset
+    # Load custom pipeline module (if available or synchronizable)
+    pipeline_mod = load_custom_pipeline(args.pipeline, server_url)
+
+    # Mount private local dataset
     print("\n[PARTITION] Initializing isolated hardware enclave...")
     seed = int(hashlib.md5(args.name.encode()).hexdigest()[:6], 16)
-    X_local, y_local = generate_local_biomarkers(n_samples=args.samples, seed=seed)
-    print(f"[PARTITION] Mounted {len(y_local)} private biomarker records. Quarantined in memory.")
+    X_local, y_local = load_edge_dataset(args.data_path, pipeline_mod, args.samples, seed)
+    print(f"[PARTITION] Quarantined {len(y_local)} private records in memory enclave.")
 
     # Register with coordinator
     print(f"\n[NETWORK] Handshaking with Master Coordinator at {server_url}...")
@@ -432,11 +519,25 @@ def main():
 
                     epoch_logs = []
                     t_start = time.time()
-                    for ep in range(1, epochs + 1):
-                        ep_loss = model.train_epoch(X_local, y_local, lr=lr)
-                        epoch_logs.append({"epoch": ep, "loss": ep_loss})
-                        print(f"    [*] Epoch {ep}/{epochs}: Local Loss = {ep_loss:.4f} | Step complete")
-                        time.sleep(0.08)
+                    if pipeline_mod and hasattr(pipeline_mod, "train_step"):
+                        try:
+                            model, epoch_logs = pipeline_mod.train_step(model, X_local, y_local, epochs=epochs, lr=lr)
+                            for el in epoch_logs:
+                                print(f"    [*] Epoch {el.get('epoch', '?')}/{epochs}: Loss = {el.get('loss', 0):.4f} | Pipeline step complete")
+                        except Exception as p_err:
+                            print(f"[PIPELINE_FALLBACK] Custom step raised {p_err}. Executing default SGD...")
+                            for ep in range(1, epochs + 1):
+                                ep_loss = model.train_epoch(X_local, y_local, lr=lr)
+                                epoch_logs.append({"epoch": ep, "loss": ep_loss})
+                                print(f"    [*] Epoch {ep}/{epochs}: Local Loss = {ep_loss:.4f} | Step complete")
+                                time.sleep(0.08)
+                    else:
+                        for ep in range(1, epochs + 1):
+                            ep_loss = model.train_epoch(X_local, y_local, lr=lr)
+                            epoch_logs.append({"epoch": ep, "loss": ep_loss})
+                            print(f"    [*] Epoch {ep}/{epochs}: Local Loss = {ep_loss:.4f} | Step complete")
+                            time.sleep(0.08)
+
 
                     t_elapsed = time.time() - t_start
 
