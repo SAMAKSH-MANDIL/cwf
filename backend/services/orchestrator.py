@@ -34,6 +34,8 @@ from backend.database.models import (
     PassportRecord,
     BlockchainTransactionRecord,
 )
+from backend.services.websocket_manager import ws_manager
+
 
 
 class NetworkOrchestrator:
@@ -421,6 +423,29 @@ class NetworkOrchestrator:
                 node_logs[tag].append(line)
             elif tag in ("Coordinator", "Aggregator", "Arbitrum", "Solana", "Relayer"):
                 node_logs["coordinator"].append(line)
+            ws_manager.broadcast_sync("LOG_EMITTED", {
+                "tag": tag,
+                "message": clean_msg,
+                "line": line,
+                "round_number": round_number,
+            })
+
+        ws_manager.broadcast_sync("ROUND_STARTED", {
+            "round_number": round_number,
+            "model_id": self.model_id,
+            "base_hash": base_hash,
+            "active_nodes_count": len(participating_clients),
+            "participating_clients": [
+                {
+                    "client_id": c.client_id,
+                    "name": c.name,
+                    "wallet_address": c.wallet_address,
+                    "hardware_tier": getattr(c, "compute_tier", "RTX4090"),
+                    "samples_count": c.num_samples,
+                }
+                for c in participating_clients.values()
+            ],
+        })
 
         log_msg("Coordinator", f"[INIT] Starting Federated Round #{round_number} for model {self.model_id}")
         log_msg("Coordinator", f"[DISPATCH] Broadcasting global baseline weights (Hash: {base_hash[:16]}...) to {len(participating_clients)} active edge nodes")
@@ -475,10 +500,25 @@ class NetworkOrchestrator:
 
                 # Record detailed epoch logs for node terminal
                 t_str = time.strftime("%H:%M:%S")
+                ws_manager.broadcast_sync("STEP_PROGRESS", {
+                    "step": 1,
+                    "step_name": "LOCAL_SGD",
+                    "client_name": client.name,
+                    "client_id": client.client_id,
+                    "round_number": round_number,
+                })
                 for ep_info in local_res.get("epoch_logs", []):
                     ep_line = f"[{t_str}] [{client.name}] [SGD_STEP] Epoch {ep_info['epoch']}/{local_epochs}: Batch Loss = {ep_info['loss']:.4f} | Local SGD step complete"
                     node_logs[client.client_id].append(ep_line)
                     execution_logs.append(ep_line)
+                    ws_manager.broadcast_sync("EPOCH_PROGRESS", {
+                        "client_name": client.name,
+                        "client_id": client.client_id,
+                        "epoch": ep_info["epoch"],
+                        "total_epochs": local_epochs,
+                        "loss": round(ep_info["loss"], 4),
+                        "round_number": round_number,
+                    })
 
             loss_b = local_res["eval_before"]["loss"]
             loss_a = local_res["eval_after"]["loss"]
@@ -487,6 +527,13 @@ class NetworkOrchestrator:
             log_msg(client.name, f"[WEIGHT_UPDATE] Calculated weight delta update: L2 Norm = {local_res['delta_norm']:.4f} | Hash = {local_res['update_hash'][:16]}...")
 
             # zkML Proof Generation
+            ws_manager.broadcast_sync("STEP_PROGRESS", {
+                "step": 2,
+                "step_name": "ZKML_SYNTHESIS",
+                "client_name": client.name,
+                "client_id": client.client_id,
+                "round_number": round_number,
+            })
             log_msg(client.name, f"[ZKML_PROVER] Compiling ONNX witness into Halo2 KZG arithmetic circuit (14,208 constraints)...")
             proof_bundle = self.zkml_engine.generate_proof(
                 base_model_hash=base_hash,
@@ -497,6 +544,14 @@ class NetworkOrchestrator:
                 sample_output=local_res["sample_witness_output"][0],
             )
             log_msg(client.name, f"[ZKML_PROVER] Proof generated successfully! Proof hash: {proof_bundle['proof_hash'][:16]}...")
+            ws_manager.broadcast_sync("ZK_PROOF_GENERATED", {
+                "client_name": client.name,
+                "client_id": client.client_id,
+                "proof_hash": proof_bundle["proof_hash"],
+                "constraints_count": 14208,
+                "is_valid": True,
+                "round_number": round_number,
+            })
 
             # Check if simulation requested a corrupted proof for this node
             is_corrupt = (simulate_corrupt_proof_node == client_id)
@@ -514,6 +569,13 @@ class NetworkOrchestrator:
             )
 
             # Step 3: Arbitrum ContributionRegistry submission
+            ws_manager.broadcast_sync("STEP_PROGRESS", {
+                "step": 3,
+                "step_name": "ARBITRUM_VERIFY",
+                "client_name": client.name,
+                "client_id": client.client_id,
+                "round_number": round_number,
+            })
             log_msg("Arbitrum", f"[VERIFY_SUBMIT] Verifying proof for {client.name} on ZKVerifier.sol & ContributionRegistry.sol...")
             arb_ok, arb_evt = self.arbitrum.submit_contribution(
                 contributor=client.wallet_address,
@@ -530,8 +592,22 @@ class NetworkOrchestrator:
                 log_msg("Arbitrum", f"[PAIRING_VALID] Proof VALID: Pairing check passed. Event ContributionVerified emitted (Tx: {arb_evt.get('tx_hash', '')[:16]}...)")
             else:
                 log_msg("Arbitrum", f"[PAIRING_REJECT] Proof REJECTED: Constraint mismatch. Contribution disallowed.")
+            ws_manager.broadcast_sync("ARBITRUM_VERIFIED", {
+                "client_name": client.name,
+                "client_id": client.client_id,
+                "tx_hash": arb_evt.get("tx_hash"),
+                "is_valid": is_valid and arb_ok,
+                "round_number": round_number,
+            })
 
             # Step 4: Cross-Chain Relayer -> Solana Program Execution
+            ws_manager.broadcast_sync("STEP_PROGRESS", {
+                "step": 4,
+                "step_name": "SOLANA_REWARD",
+                "client_name": client.name,
+                "client_id": client.client_id,
+                "round_number": round_number,
+            })
             sol_result = {"success": False, "reward_amount": 0.0, "tx_signature": None}
             if is_valid and arb_ok:
                 log_msg("Relayer", f"[BRIDGE_FORWARD] Cross-Chain Relayer forwarding Arbitrum verification event to Solana Program...")
@@ -545,6 +621,13 @@ class NetworkOrchestrator:
                 reward_tokens = sol_result.get("reward_amount", 0.0)
                 tx_sig = sol_result.get("tx_signature", "")
                 log_msg("Solana", f"[REWARD_DISBURSED] Reward disbursed to {client.name}: {reward_tokens:.3f} SOL tokens (Signature: {tx_sig[:18]}...)")
+                ws_manager.broadcast_sync("SOLANA_REWARD_DISBURSED", {
+                    "client_name": client.name,
+                    "client_id": client.client_id,
+                    "reward_amount": reward_tokens,
+                    "tx_signature": tx_sig,
+                    "round_number": round_number,
+                })
             solana_payouts.append(sol_result)
 
             # Track client update status for aggregator
@@ -567,6 +650,11 @@ class NetworkOrchestrator:
             })
 
         # Step 5: Robust FedAvg Aggregation (Norm clipping & outlier rejection)
+        ws_manager.broadcast_sync("STEP_PROGRESS", {
+            "step": 5,
+            "step_name": "FEDAVG_MERGE",
+            "round_number": round_number,
+        })
         log_msg("Aggregator", f"[FEDAVG_INIT] Robust FedAvg aggregation initiated over {len(client_updates)} update vectors...")
         agg_result = self.fl_coordinator.aggregator.aggregate(
             base_weights=base_weights, client_updates=client_updates
@@ -575,6 +663,12 @@ class NetworkOrchestrator:
         log_msg("Aggregator", f"[CONSENSUS_ACCEPTED] Accepted nodes for consensus: {', '.join(agg_result['accepted_clients'])}")
         if agg_result['rejected_clients']:
             log_msg("Aggregator", f"[OUTLIER_REJECTED] Filtered out deviating nodes: {', '.join(agg_result['rejected_clients'])}")
+
+        ws_manager.broadcast_sync("BYZANTINE_DEFENSE", {
+            "accepted_clients": agg_result["accepted_clients"],
+            "rejected_clients": agg_result["rejected_clients"],
+            "round_number": round_number,
+        })
 
         # Step 6: Update global model weights
         self.fl_coordinator.current_round = round_number
@@ -599,6 +693,20 @@ class NetworkOrchestrator:
         )
         log_msg("Arbitrum", f"[MODEL_REGISTRY] ModelRegistry.sol updated on-chain. Storage CID: {storage_cid} (Tx: {arb_round_evt.get('tx_hash', '')[:16]}...)")
         log_msg("Coordinator", f"[ROUND_COMPLETE] Round #{round_number} complete! {len(agg_result['accepted_clients'])} nodes rewarded. ZERO raw data uploaded.")
+
+        ws_manager.broadcast_sync("ROUND_COMPLETED", {
+            "round_number": round_number,
+            "accuracy_before": round(eval_before["accuracy"] * 100, 2),
+            "accuracy_after": round(eval_after["accuracy"] * 100, 2),
+            "accuracy_delta": round(acc_delta * 100, 2),
+            "loss_before": round(eval_before["loss"], 4),
+            "loss_after": round(eval_after["loss"], 4),
+            "new_model_hash": new_hash,
+            "storage_cid": storage_cid,
+            "arbitrum_tx": arb_round_evt.get("tx_hash"),
+            "accepted_nodes": len(agg_result["accepted_clients"]),
+            "solana_payouts_count": len([p for p in solana_payouts if p.get("success")]),
+        })
 
         # Step 8: Persist all round metadata in Database
         try:

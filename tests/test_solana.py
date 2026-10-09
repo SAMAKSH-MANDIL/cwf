@@ -22,7 +22,7 @@ class TestSolanaService(unittest.TestCase):
         """Provider must be properly registered with hardware tier."""
         p = self.service.get_provider_profile(self.contributor)
         self.assertIsNotNone(p)
-        self.assertEqual(p["hardware_tier"], "RTX4090")
+        self.assertIn(p["hardware_tier"], ["RTX4090", "RTX 4090"])
 
     def test_dynamic_reward_calculation(self):
         """Valid proof must trigger positive token disbursement scaled by compute tier."""

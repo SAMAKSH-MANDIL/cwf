@@ -13,8 +13,10 @@ Provides comprehensive REST endpoints for:
 """
 
 import os
+import json
+import time
 from typing import Dict, List, Any, Optional
-from fastapi import FastAPI, Depends, HTTPException, Query
+from fastapi import FastAPI, Depends, HTTPException, Query, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
@@ -31,6 +33,7 @@ from backend.database.models import (
     BlockchainTransactionRecord,
 )
 from backend.services.orchestrator import orchestrator
+from backend.services.websocket_manager import ws_manager
 
 app = FastAPI(
     title="Decentralized Verifiable AI Network API",
@@ -49,8 +52,13 @@ app.add_middleware(
 
 
 @app.on_event("startup")
-def on_startup():
+async def on_startup():
+    import asyncio
     init_db()
+    try:
+        ws_manager.set_loop(asyncio.get_running_loop())
+    except Exception:
+        pass
 
 
 # -------------------------------------------------------------
@@ -211,6 +219,47 @@ def get_latest_round_logs():
         "round_number": getattr(orchestrator, "last_round_number", 0),
         "node_logs": getattr(orchestrator, "last_round_logs", {}),
     }
+
+
+@app.websocket("/ws/training")
+async def websocket_training_stream(websocket: WebSocket):
+    """
+    Real-time bidirectional WebSocket stream for training rounds:
+    - Broadcasts live per-epoch loss, gradient delta norms, and node logs
+    - Emits zkML constraint synthesis and cryptographic commitments
+    - Streams Arbitrum EVM verification and Solana token reward payouts
+    - Accepts control commands: {"action": "START_ROUND", "epochs": 4, "learning_rate": 0.03}
+    """
+    await ws_manager.connect(websocket)
+    try:
+        while True:
+            raw_msg = await websocket.receive_text()
+            try:
+                cmd = json.loads(raw_msg)
+                action = str(cmd.get("action", "")).upper()
+                if action == "PING":
+                    await websocket.send_json({"event": "PONG", "timestamp": time.time()})
+                elif action in ("START_ROUND", "RUN_ROUND"):
+                    epochs = int(cmd.get("epochs", 4))
+                    lr = float(cmd.get("learning_rate", 0.03))
+                    nodes = cmd.get("active_node_ids")
+                    import asyncio
+                    loop = asyncio.get_running_loop()
+                    loop.run_in_executor(
+                        None,
+                        orchestrator.execute_live_round,
+                        epochs,
+                        lr,
+                        None,
+                        nodes,
+                    )
+            except Exception as e:
+                await websocket.send_json({"event": "ERROR", "message": str(e)})
+    except WebSocketDisconnect:
+        ws_manager.disconnect(websocket)
+    except Exception:
+        ws_manager.disconnect(websocket)
+
 
 
 # -------------------------------------------------------------
