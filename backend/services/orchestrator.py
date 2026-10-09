@@ -285,6 +285,23 @@ class NetworkOrchestrator:
         }
         self.registered_workers[node_name.lower()] = worker_info
         self.registered_workers[wallet.lower()] = worker_info
+
+        t_str = time.strftime("%H:%M:%S")
+        ws_manager.broadcast_sync("WORKER_ONLINE", {
+            "node_name": node_name,
+            "wallet_address": wallet,
+            "hardware_tier": hardware_tier,
+            "vram_gb": vram_gb,
+            "samples_count": samples_count,
+            "status": "ONLINE",
+        })
+        ws_manager.broadcast_sync("LOG_EMITTED", {
+            "tag": "Coordinator",
+            "message": f"[MESH_NODE_JOIN] External device '{node_name}' ({hardware_tier}, {vram_gb} GB VRAM) connected to federated mesh.",
+            "line": f"[{t_str}] [Coordinator] [MESH_NODE_JOIN] External device '{node_name}' ({hardware_tier}, {vram_gb} GB VRAM) connected to federated mesh.",
+            "round_number": self.fl_coordinator.current_round,
+        })
+
         return {
             "status": "REGISTERED",
             "node_name": node_name,
@@ -339,11 +356,38 @@ class NetworkOrchestrator:
         t_str = time.strftime("%H:%M:%S")
         loss_b = payload.get("loss_before", 0.58)
         loss_a = payload.get("loss_after", 0.32)
-        log_line = f"[{t_str}] [{node_name}] [NATIVE_DAEMON] Real local SGD computed on native hardware ({payload.get('hardware_tier', 'Worker Hardware')}). Loss: {loss_b:.4f} -> {loss_a:.4f}"
+        hw_tier = payload.get("hardware_tier", "Worker Hardware")
+        log_line = f"[{t_str}] [{node_name}] [NATIVE_DAEMON] Real local SGD computed on native hardware ({hw_tier}). Loss: {loss_b:.4f} -> {loss_a:.4f}"
         if node_name in self.last_round_logs:
             self.last_round_logs[node_name].append(log_line)
         if wallet in self.last_round_logs:
             self.last_round_logs[wallet].append(log_line)
+
+        # Broadcast real-time telemetry from external worker to all frontend WebSocket clients
+        ws_manager.broadcast_sync("LOG_EMITTED", {
+            "tag": node_name,
+            "message": f"[NATIVE_DAEMON] Real local SGD computed on native hardware ({hw_tier}). Loss: {loss_b:.4f} -> {loss_a:.4f}",
+            "line": log_line,
+            "round_number": round_id,
+        })
+        gpu_stats = payload.get("gpu_stats")
+        if gpu_stats:
+            gpu_line = f"[{t_str}] [{node_name}] [GPU_TELEMETRY] Load: {gpu_stats.get('util_pct', 0)}% | VRAM: {gpu_stats.get('mem_used_mb', 0)}/{gpu_stats.get('mem_total_mb', 0)} MB | Temp: {gpu_stats.get('temp_c', 0)}°C"
+            ws_manager.broadcast_sync("LOG_EMITTED", {
+                "tag": node_name,
+                "message": gpu_line,
+                "line": gpu_line,
+                "round_number": round_id,
+            })
+        for ep_info in payload.get("epoch_logs", []):
+            ws_manager.broadcast_sync("EPOCH_PROGRESS", {
+                "client_name": node_name,
+                "client_id": node_name,
+                "epoch": ep_info.get("epoch", 1),
+                "total_epochs": len(payload.get("epoch_logs", [])),
+                "loss": round(ep_info.get("loss", 0.0), 4),
+                "round_number": round_id,
+            })
 
         return {
             "status": "ACCEPTED",
@@ -454,6 +498,33 @@ class NetworkOrchestrator:
         proof_records_data = []
         arbitrum_events = []
         solana_payouts = []
+
+        # Check if any participating node is a registered native worker daemon
+        online_daemons = []
+        now = time.time()
+        for cid, cl in participating_clients.items():
+            w_norm = (cl.wallet_address or "").lower()
+            c_norm = (cl.name or "").lower()
+            is_online_daemon = False
+            for r_key, r_info in self.registered_workers.items():
+                if (r_key in (w_norm, c_norm) or w_norm in r_key or c_norm in r_key) and (now - r_info.get("last_seen", 0) < 120):
+                    is_online_daemon = True
+                    break
+            if is_online_daemon:
+                online_daemons.append((w_norm, c_norm, cl.name))
+
+        if online_daemons:
+            log_msg("Coordinator", f"[DAEMON_SYNC] Awaiting real local hardware SGD completion from {len(online_daemons)} online native worker daemon(s)...")
+            wait_deadline = time.time() + 3.5
+            while time.time() < wait_deadline:
+                all_received = True
+                for w_n, c_n, _ in online_daemons:
+                    if f"{w_n}_{round_number}" not in self.worker_updates and f"{c_n}_{round_number}" not in self.worker_updates:
+                        all_received = False
+                        break
+                if all_received:
+                    break
+                time.sleep(0.1)
 
         # Step 1 & 2: Local training & zkML proof synthesis for each client
         for client_id, client in participating_clients.items():

@@ -672,7 +672,33 @@ export default function TrainingPage() {
             const payload = JSON.parse(event.data);
             const { event: evtType, data } = payload;
 
-            if (evtType === "ROUND_STARTED") {
+            if (evtType === "WORKER_ONLINE") {
+              setEdgeNodes((prev) => {
+                const wKey = (data.wallet_address || "").toLowerCase();
+                const nKey = (data.node_name || "").toLowerCase();
+                const exists = prev.some((p) => p.wallet_address.toLowerCase() === wKey || p.name.toLowerCase() === nKey);
+                if (exists) {
+                  return prev.map((p) =>
+                    p.wallet_address.toLowerCase() === wKey || p.name.toLowerCase() === nKey
+                      ? { ...p, enabled: true, hardware_tier: data.hardware_tier, vram_gb: data.vram_gb }
+                      : p
+                  );
+                } else {
+                  return [
+                    ...prev,
+                    {
+                      id: data.wallet_address || `node-${prev.length + 1}`,
+                      name: data.node_name,
+                      hardware_tier: data.hardware_tier,
+                      vram_gb: data.vram_gb,
+                      samples_count: data.samples_count || 120,
+                      wallet_address: data.wallet_address,
+                      enabled: true,
+                    },
+                  ];
+                }
+              });
+            } else if (evtType === "ROUND_STARTED") {
               setIsTraining(true);
               setActiveStep(1);
             } else if (evtType === "STEP_PROGRESS") {
