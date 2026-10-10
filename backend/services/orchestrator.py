@@ -14,6 +14,8 @@ import json
 import time
 import hashlib
 import re
+import math
+import numpy as np
 from typing import Dict, List, Any, Optional
 
 EMOJI_REGEX = re.compile(
@@ -352,24 +354,47 @@ class NetworkOrchestrator:
             self.worker_updates[f"{wallet}_{round_id}"] = payload
         self.worker_updates[sub_key] = payload
 
-        # Append to live logs for telemetry
+        # Extract weights and metrics from worker payload
         t_str = time.strftime("%H:%M:%S")
         loss_b = payload.get("loss_before", 0.58)
         loss_a = payload.get("loss_after", 0.32)
         hw_tier = payload.get("hardware_tier", "Worker Hardware")
-        log_line = f"[{t_str}] [{node_name}] [NATIVE_DAEMON] Real local SGD computed on native hardware ({hw_tier}). Loss: {loss_b:.4f} -> {loss_a:.4f}"
+        acc_g = payload.get("accuracy_gain", 0.0) * 100
+        total_p = payload.get("total_params") or len(payload.get("update_weights", []))
+        w_l2 = payload.get("weights_l2_norm") or (float(np.linalg.norm(payload.get("update_weights", []))) if total_p > 0 else 0.0)
+        d_norm = payload.get("delta_norm", 0.0)
+        w_prev = payload.get("weights_preview") or [round(float(w), 4) for w in np.array(payload.get("update_weights", []))[:6]]
+        u_hash = str(payload.get("update_hash", "0x..."))[:16]
+
+        log_line = f"[{t_str}] [{node_name}] [NATIVE_DAEMON] Local SGD complete on {hw_tier}. Loss: {loss_b:.4f} -> {loss_a:.4f} (+{acc_g:.1f}% Acc Gain). Norm={w_l2:.4f}"
         if node_name in self.last_round_logs:
             self.last_round_logs[node_name].append(log_line)
         if wallet in self.last_round_logs:
             self.last_round_logs[wallet].append(log_line)
 
-        # Broadcast real-time telemetry from external worker to all frontend WebSocket clients
         ws_manager.broadcast_sync("LOG_EMITTED", {
             "tag": node_name,
-            "message": f"[NATIVE_DAEMON] Real local SGD computed on native hardware ({hw_tier}). Loss: {loss_b:.4f} -> {loss_a:.4f}",
+            "message": log_line,
             "line": log_line,
             "round_number": round_id,
         })
+
+        # Explicitly log incoming weights received by root coordinator
+        coord_line = (
+            f"[{t_str}] [Coordinator] [INCOMING_WEIGHTS] Received {total_p} weights from node '{node_name}' ({hw_tier}): "
+            f"L2 Norm = {w_l2:.4f} | Delta Norm = {d_norm:.4f} | Hash = {u_hash}... | "
+            f"Sample Weights = {w_prev}"
+        )
+        if "coordinator" not in self.last_round_logs:
+            self.last_round_logs["coordinator"] = []
+        self.last_round_logs["coordinator"].append(coord_line)
+        ws_manager.broadcast_sync("LOG_EMITTED", {
+            "tag": "Coordinator",
+            "message": coord_line,
+            "line": coord_line,
+            "round_number": round_id,
+        })
+
         gpu_stats = payload.get("gpu_stats")
         if gpu_stats:
             gpu_line = f"[{t_str}] [{node_name}] [GPU_TELEMETRY] Load: {gpu_stats.get('util_pct', 0)}% | VRAM: {gpu_stats.get('mem_used_mb', 0)}/{gpu_stats.get('mem_total_mb', 0)} MB | Temp: {gpu_stats.get('temp_c', 0)}°C"
@@ -386,6 +411,9 @@ class NetworkOrchestrator:
                 "epoch": ep_info.get("epoch", 1),
                 "total_epochs": len(payload.get("epoch_logs", [])),
                 "loss": round(ep_info.get("loss", 0.0), 4),
+                "accuracy": round(ep_info.get("accuracy", 0.0) * 100, 2),
+                "delta_norm": round(ep_info.get("delta_norm", 0.0), 4),
+                "sample_weights": ep_info.get("sample_weights", []),
                 "round_number": round_id,
             })
 
@@ -417,10 +445,27 @@ class NetworkOrchestrator:
             "round_number": self.fl_coordinator.current_round,
         })
 
-    def record_worker_epoch(self, node_name: str, epoch: int, total_epochs: int, loss: float, wallet: Optional[str] = None, round_id: Optional[int] = None):
-        """Streams live epoch SGD loss from external device to WebSocket."""
+    def record_worker_epoch(
+        self,
+        node_name: str,
+        epoch: int,
+        total_epochs: int,
+        loss: float,
+        accuracy: float = 0.0,
+        learning_rate: float = 0.03,
+        delta_norm: float = 0.0,
+        sample_weights: Optional[List[float]] = None,
+        wallet: Optional[str] = None,
+        round_id: Optional[int] = None,
+    ):
+        """Streams comprehensive per-epoch SGD metrics and sample weights to WebSocket."""
         t_str = time.strftime("%H:%M:%S")
-        line = f"[{t_str}] [{node_name}] [LOCAL_EPOCH] Epoch {epoch}/{total_epochs}: Local Loss = {loss:.4f} | Real hardware execution"
+        sw_prev = [round(float(w), 4) for w in (sample_weights or [])[:5]]
+        line = (
+            f"[{t_str}] [{node_name}] [EPOCH_METRICS] Epoch {epoch}/{total_epochs}: "
+            f"Loss = {loss:.4f} | Accuracy = {accuracy:.1f}% | Delta Norm = {delta_norm:.4f} | "
+            f"Sample Weights = {sw_prev}"
+        )
         if node_name not in self.last_round_logs:
             self.last_round_logs[node_name] = []
         self.last_round_logs[node_name].append(line)
@@ -442,6 +487,10 @@ class NetworkOrchestrator:
             "epoch": epoch,
             "total_epochs": total_epochs,
             "loss": round(float(loss), 4),
+            "accuracy": round(float(accuracy), 2),
+            "learning_rate": round(float(learning_rate), 4),
+            "delta_norm": round(float(delta_norm), 4),
+            "sample_weights": sw_prev,
             "round_number": round_id or self.fl_coordinator.current_round,
         })
 
@@ -779,17 +828,54 @@ class NetworkOrchestrator:
             "round_number": round_number,
         })
         log_msg("Aggregator", f"[FEDAVG_INIT] Robust FedAvg aggregation initiated over {len(client_updates)} update vectors...")
+
+        # Explicitly inspect and log incoming weight vectors from all contributing nodes
+        log_msg("Aggregator", f"[INSPECT_NODE_WEIGHTS] Inspecting incoming weight vectors from {len(client_updates)} participating nodes:")
+        node_weights_summary = {}
+        for cu in client_updates:
+            c_name = cu.get("client_id")
+            for cl in participating_clients.values():
+                if cl.client_id == c_name:
+                    c_name = cl.name
+                    break
+            w_u = np.array(cu.get("update_weights", []))
+            w_norm = float(np.linalg.norm(w_u)) if len(w_u) > 0 else 0.0
+            d_norm = float(cu.get("delta_norm", 0.0))
+            w_prev = [round(float(x), 4) for x in w_u[:6]]
+            node_weights_summary[c_name] = {
+                "params": len(w_u),
+                "norm": round(w_norm, 4),
+                "delta_norm": round(d_norm, 4),
+                "sample_weights": w_prev,
+            }
+            log_msg("Aggregator", f"--> Node '{c_name}': {len(w_u)} params | L2 Norm = {w_norm:.4f} | Delta Norm = {d_norm:.4f} | Sample Weights = {w_prev}")
+
         agg_result = self.fl_coordinator.aggregator.aggregate(
             base_weights=base_weights, client_updates=client_updates
         )
+
+        new_w = np.array(agg_result["new_weights"])
+        new_w_norm = float(np.linalg.norm(new_w)) if len(new_w) > 0 else 0.0
+        new_w_preview = [round(float(x), 4) for x in new_w[:8]]
+        delta_agg_norm = float(np.linalg.norm(new_w - base_weights)) if len(new_w) == len(base_weights) else 0.0
+
         log_msg("Aggregator", f"[BYZANTINE_DEFENSE] Byzantine defenses applied: L2 norm clipping (threshold: 4.0) & Euclidean distance outlier rejection.")
         log_msg("Aggregator", f"[CONSENSUS_ACCEPTED] Accepted nodes for consensus: {', '.join(agg_result['accepted_clients'])}")
         if agg_result['rejected_clients']:
             log_msg("Aggregator", f"[OUTLIER_REJECTED] Filtered out deviating nodes: {', '.join(agg_result['rejected_clients'])}")
 
+        log_msg("Aggregator", f"[AGGREGATED_WEIGHTS] ROOT COORDINATOR COMPUTED GLOBAL FEDAVG CONSENSUS WEIGHTS:")
+        log_msg("Aggregator", f"--> Contributing Nodes ({len(agg_result['accepted_clients'])} accepted): {', '.join(agg_result['accepted_clients'])}")
+        log_msg("Aggregator", f"--> Global Model Params: {len(new_w)} total weights | Aggregated L2 Norm = {new_w_norm:.4f} (Consensus Shift Delta = {delta_agg_norm:.4f})")
+        log_msg("Aggregator", f"--> Aggregated Global Weights Vector (first {len(new_w_preview)} params): {new_w_preview}")
+
         ws_manager.broadcast_sync("BYZANTINE_DEFENSE", {
             "accepted_clients": agg_result["accepted_clients"],
             "rejected_clients": agg_result["rejected_clients"],
+            "aggregated_weights_preview": new_w_preview,
+            "aggregated_norm": round(new_w_norm, 4),
+            "delta_agg_norm": round(delta_agg_norm, 4),
+            "node_weights_summary": node_weights_summary,
             "round_number": round_number,
         })
 
@@ -825,6 +911,9 @@ class NetworkOrchestrator:
             "loss_before": round(eval_before["loss"], 4),
             "loss_after": round(eval_after["loss"], 4),
             "new_model_hash": new_hash,
+            "aggregated_weights_preview": new_w_preview,
+            "aggregated_norm": round(new_w_norm, 4),
+            "delta_agg_norm": round(delta_agg_norm, 4),
             "storage_cid": storage_cid,
             "arbitrum_tx": arb_round_evt.get("tx_hash"),
             "accepted_nodes": len(agg_result["accepted_clients"]),

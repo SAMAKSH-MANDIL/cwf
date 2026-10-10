@@ -25,15 +25,18 @@ class TrainingWebSocketManager:
     async def connect(self, websocket: WebSocket):
         await websocket.accept()
         self.active_connections.append(websocket)
-        await websocket.send_json({
-            "event": "WS_CONNECTED",
-            "timestamp": time.time(),
-            "data": {
-                "status": "ONLINE",
-                "message": "Connected to FedZero Coordinator WebSocket Telemetry Stream",
-                "active_subscribers": len(self.active_connections),
-            },
-        })
+        try:
+            await websocket.send_json({
+                "event": "WS_CONNECTED",
+                "timestamp": time.time(),
+                "data": {
+                    "status": "ONLINE",
+                    "message": "Connected to FedZero Coordinator WebSocket Telemetry Stream",
+                    "active_subscribers": len(self.active_connections),
+                },
+            })
+        except Exception:
+            self.disconnect(websocket)
 
     def disconnect(self, websocket: WebSocket):
         if websocket in self.active_connections:

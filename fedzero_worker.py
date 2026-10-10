@@ -334,8 +334,20 @@ def stream_log(server_url: str, node_name: str, wallet: str, message: str):
         pass
 
 
-def stream_epoch(server_url: str, node_name: str, wallet: str, epoch: int, total_epochs: int, loss: float, round_id: int):
-    """Streams live epoch SGD progress to master coordinator."""
+def stream_epoch(
+    server_url: str,
+    node_name: str,
+    wallet: str,
+    epoch: int,
+    total_epochs: int,
+    loss: float,
+    round_id: int,
+    accuracy: float = 0.0,
+    learning_rate: float = 0.03,
+    delta_norm: float = 0.0,
+    sample_weights: list = None,
+):
+    """Streams live comprehensive epoch SGD metrics and sample weights to coordinator."""
     try:
         http_post(f"{server_url}/api/worker/epoch-progress", {
             "node_name": node_name,
@@ -343,6 +355,10 @@ def stream_epoch(server_url: str, node_name: str, wallet: str, epoch: int, total
             "epoch": epoch,
             "total_epochs": total_epochs,
             "loss": round(float(loss), 4),
+            "accuracy": round(float(accuracy) * 100, 2),
+            "learning_rate": round(float(learning_rate), 4),
+            "delta_norm": round(float(delta_norm), 4),
+            "sample_weights": [round(float(w), 4) for w in (sample_weights or [])[:6]],
             "round_id": round_id,
         }, timeout=2)
     except Exception:
@@ -590,25 +606,58 @@ def main():
                             for el in epoch_logs:
                                 ep_num = el.get("epoch", 1)
                                 ep_l = el.get("loss", 0.0)
-                                print(f"    [*] Epoch {ep_num}/{epochs}: Loss = {ep_l:.4f} | Pipeline step complete")
-                                stream_epoch(server_url, args.name, wallet_address, ep_num, epochs, ep_l, round_id)
-                                stream_log(server_url, args.name, wallet_address, f"[EPOCH] Epoch {ep_num}/{epochs}: Local Loss = {ep_l:.4f}")
+                                _, ep_acc = model.evaluate(X_local, y_local)
+                                curr_w = model.get_weights_flat()
+                                curr_delta = [curr_w[i] - base_weights_flat[i] for i in range(len(curr_w))]
+                                curr_delta_norm = math.sqrt(sum(d * d for d in curr_delta))
+                                sample_w5 = [round(w, 4) for w in curr_w[:5]]
+                                el["accuracy"] = ep_acc
+                                el["delta_norm"] = curr_delta_norm
+                                el["sample_weights"] = sample_w5
+                                print(f"    [*] Epoch {ep_num}/{epochs}: Loss = {ep_l:.4f} | Accuracy = {ep_acc*100:.1f}% | Weight Delta Norm = {curr_delta_norm:.4f} | LR = {lr}")
+                                print(f"        --> Weights Sample (first 5 params): {sample_w5}")
+                                stream_epoch(server_url, args.name, wallet_address, ep_num, epochs, ep_l, round_id, accuracy=ep_acc, learning_rate=lr, delta_norm=curr_delta_norm, sample_weights=sample_w5)
+                                stream_log(server_url, args.name, wallet_address, f"[EPOCH_METRICS] Epoch {ep_num}/{epochs} | Loss = {ep_l:.4f} | Accuracy = {ep_acc*100:.1f}% | Delta Norm = {curr_delta_norm:.4f} | Sample Weights = {sample_w5}")
                         except Exception as p_err:
                             print(f"[PIPELINE_FALLBACK] Custom step raised {p_err}. Executing default SGD...")
                             for ep in range(1, epochs + 1):
                                 ep_loss = model.train_epoch(X_local, y_local, lr=lr)
-                                epoch_logs.append({"epoch": ep, "loss": ep_loss})
-                                print(f"    [*] Epoch {ep}/{epochs}: Local Loss = {ep_loss:.4f} | Step complete")
-                                stream_epoch(server_url, args.name, wallet_address, ep, epochs, ep_loss, round_id)
-                                stream_log(server_url, args.name, wallet_address, f"[EPOCH] Epoch {ep}/{epochs}: Local Loss = {ep_loss:.4f}")
+                                _, ep_acc = model.evaluate(X_local, y_local)
+                                curr_w = model.get_weights_flat()
+                                curr_delta = [curr_w[i] - base_weights_flat[i] for i in range(len(curr_w))]
+                                curr_delta_norm = math.sqrt(sum(d * d for d in curr_delta))
+                                sample_w5 = [round(w, 4) for w in curr_w[:5]]
+                                epoch_logs.append({
+                                    "epoch": ep,
+                                    "loss": ep_loss,
+                                    "accuracy": ep_acc,
+                                    "delta_norm": curr_delta_norm,
+                                    "sample_weights": sample_w5,
+                                })
+                                print(f"    [*] Epoch {ep}/{epochs}: Loss = {ep_loss:.4f} | Accuracy = {ep_acc*100:.1f}% | Weight Delta Norm = {curr_delta_norm:.4f} | LR = {lr}")
+                                print(f"        --> Weights Sample (first 5 params): {sample_w5}")
+                                stream_epoch(server_url, args.name, wallet_address, ep, epochs, ep_loss, round_id, accuracy=ep_acc, learning_rate=lr, delta_norm=curr_delta_norm, sample_weights=sample_w5)
+                                stream_log(server_url, args.name, wallet_address, f"[EPOCH_METRICS] Epoch {ep}/{epochs} | Loss = {ep_loss:.4f} | Accuracy = {ep_acc*100:.1f}% | Delta Norm = {curr_delta_norm:.4f} | Sample Weights = {sample_w5}")
                                 time.sleep(0.08)
                     else:
                         for ep in range(1, epochs + 1):
                             ep_loss = model.train_epoch(X_local, y_local, lr=lr)
-                            epoch_logs.append({"epoch": ep, "loss": ep_loss})
-                            print(f"    [*] Epoch {ep}/{epochs}: Local Loss = {ep_loss:.4f} | Step complete")
-                            stream_epoch(server_url, args.name, wallet_address, ep, epochs, ep_loss, round_id)
-                            stream_log(server_url, args.name, wallet_address, f"[EPOCH] Epoch {ep}/{epochs}: Local Loss = {ep_loss:.4f}")
+                            _, ep_acc = model.evaluate(X_local, y_local)
+                            curr_w = model.get_weights_flat()
+                            curr_delta = [curr_w[i] - base_weights_flat[i] for i in range(len(curr_w))]
+                            curr_delta_norm = math.sqrt(sum(d * d for d in curr_delta))
+                            sample_w5 = [round(w, 4) for w in curr_w[:5]]
+                            epoch_logs.append({
+                                "epoch": ep,
+                                "loss": ep_loss,
+                                "accuracy": ep_acc,
+                                "delta_norm": curr_delta_norm,
+                                "sample_weights": sample_w5,
+                            })
+                            print(f"    [*] Epoch {ep}/{epochs}: Loss = {ep_loss:.4f} | Accuracy = {ep_acc*100:.1f}% | Weight Delta Norm = {curr_delta_norm:.4f} | LR = {lr}")
+                            print(f"        --> Weights Sample (first 5 params): {sample_w5}")
+                            stream_epoch(server_url, args.name, wallet_address, ep, epochs, ep_loss, round_id, accuracy=ep_acc, learning_rate=lr, delta_norm=curr_delta_norm, sample_weights=sample_w5)
+                            stream_log(server_url, args.name, wallet_address, f"[EPOCH_METRICS] Epoch {ep}/{epochs} | Loss = {ep_loss:.4f} | Accuracy = {ep_acc*100:.1f}% | Delta Norm = {curr_delta_norm:.4f} | Sample Weights = {sample_w5}")
                             time.sleep(0.08)
 
                     t_elapsed = time.time() - t_start
@@ -623,17 +672,30 @@ def main():
                     loss_after, acc_after = model.evaluate(X_local, y_local)
                     acc_gain = acc_after - acc_before
 
-                    print(f"\n--> Local SGD complete in {t_elapsed:.2f}s using [{backend_label()}]!")
-                    print(f"--> Result: Loss {loss_before:.4f} -> {loss_after:.4f} (Accuracy Gain: +{acc_gain*100:.1f}%)")
-                    stream_log(server_url, args.name, wallet_address, f"[CONVERGED] Local SGD complete in {t_elapsed:.2f}s. Loss: {loss_before:.4f} -> {loss_after:.4f} (Gain: +{acc_gain*100:.1f}%)")
-
-                    # Weight delta + SHA-256
+                    # Weight delta, L2 norms, parameter counts, and SHA-256
                     new_weights_flat = model.get_weights_flat()
                     delta = [new_weights_flat[i] - base_weights_flat[i] for i in range(len(new_weights_flat))]
                     delta_norm = math.sqrt(sum(d*d for d in delta))
+                    total_params = len(new_weights_flat)
+                    weights_l2_norm = math.sqrt(sum(w*w for w in new_weights_flat))
+                    weights_preview_8 = [round(w, 4) for w in new_weights_flat[:8]]
+                    delta_preview_8 = [round(d, 4) for d in delta[:8]]
                     delta_bytes = json.dumps([round(d, 5) for d in delta]).encode("utf-8")
                     update_hash = hashlib.sha256(delta_bytes).hexdigest()
-                    print(f"--> Weight delta norm: {delta_norm:.4f} | SHA-256 Hash: {update_hash[:16]}...")
+
+                    print("\n" + "=" * 76)
+                    print(f" [LOCAL SGD COMPLETE] Model Training Converged on [{backend_label()}]")
+                    print(f" --> Total Parameters: {total_params} weights")
+                    print(f" --> Overall Weights L2 Norm: {weights_l2_norm:.4f} | Gradient Delta Norm: {delta_norm:.4f}")
+                    print(f" --> Baseline Performance:    Loss = {loss_before:.4f} | Accuracy = {acc_before*100:.1f}%")
+                    print(f" --> Final Performance:       Loss = {loss_after:.4f}  | Accuracy = {acc_after*100:.1f}% (+{acc_gain*100:.1f}%)")
+                    print(f" --> Trained Weights Vector (first 8 params): {weights_preview_8}")
+                    print(f" --> Gradient Delta Vector (first 8 params):  {delta_preview_8}")
+                    print(f" --> SHA-256 Update Hash: {update_hash[:16]}...")
+                    print("=" * 76 + "\n")
+
+                    stream_log(server_url, args.name, wallet_address, f"[SGD_CONVERGED] Local SGD complete in {t_elapsed:.2f}s on {hardware_tier}. Loss: {loss_before:.4f}->{loss_after:.4f} (Acc: {acc_before*100:.1f}%->{acc_after*100:.1f}%, Gain: +{acc_gain*100:.1f}%)")
+                    stream_log(server_url, args.name, wallet_address, f"[LOCAL_WEIGHTS_SUMMARY] Params={total_params} | L2 Norm={weights_l2_norm:.4f} | Delta Norm={delta_norm:.4f} | Weights Vector Preview={weights_preview_8}")
 
                     # Witness sample
                     sample_in = X_local[0]
@@ -647,6 +709,10 @@ def main():
                         "hardware_tier": hardware_tier,
                         "compute_backend": backend_label(),
                         "delta_norm": delta_norm,
+                        "weights_l2_norm": weights_l2_norm,
+                        "total_params": total_params,
+                        "weights_preview": weights_preview_8,
+                        "delta_preview": delta_preview_8,
                         "loss_before": loss_before,
                         "loss_after": loss_after,
                         "loss_reduction": max(0.0, loss_before - loss_after),
@@ -661,8 +727,8 @@ def main():
                         "training_time_sec": round(t_elapsed, 3),
                     }
 
-                    print("[SUBMIT] Transmitting locally computed gradients to Master Coordinator...")
-                    stream_log(server_url, args.name, wallet_address, f"[SUBMIT_WEIGHTS] Gradient update hash: {update_hash[:16]}... (Delta norm = {delta_norm:.4f}). Transmitting to coordinator.")
+                    print("[SUBMIT] Transmitting locally computed weights to Master Coordinator...")
+                    stream_log(server_url, args.name, wallet_address, f"[TRANSMITTING_WEIGHTS] Gradient update hash: {update_hash[:16]}... (Delta norm = {delta_norm:.4f}, Total params = {total_params}). Transmitting to coordinator.")
                     sub_res = http_post(f"{server_url}/api/worker/submit-update", submit_payload)
                     if "error" in sub_res:
                         print(f"[ERROR] Submission failed: {sub_res['error']}")

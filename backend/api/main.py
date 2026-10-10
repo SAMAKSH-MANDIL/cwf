@@ -489,18 +489,26 @@ class WorkerEpochRequest(BaseModel):
     epoch: int
     total_epochs: int
     loss: float
+    accuracy: Optional[float] = 0.0
+    learning_rate: Optional[float] = 0.03
+    delta_norm: Optional[float] = 0.0
+    sample_weights: Optional[List[float]] = []
     wallet_address: Optional[str] = None
     round_id: Optional[int] = None
 
 
 @app.post("/api/worker/epoch-progress")
 def receive_worker_epoch(payload: WorkerEpochRequest):
-    """Streams per-epoch local SGD loss from external device to frontend WebSocket in real-time."""
+    """Streams per-epoch local SGD loss, accuracy, and sample weights from external device to frontend WebSocket."""
     orchestrator.record_worker_epoch(
         node_name=payload.node_name,
         epoch=payload.epoch,
         total_epochs=payload.total_epochs,
         loss=payload.loss,
+        accuracy=payload.accuracy,
+        learning_rate=payload.learning_rate,
+        delta_norm=payload.delta_norm,
+        sample_weights=payload.sample_weights,
         wallet=payload.wallet_address,
         round_id=payload.round_id,
     )
