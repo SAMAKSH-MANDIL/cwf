@@ -35,7 +35,11 @@ import {
   Binary,
   BarChart2,
   Target,
-  Download
+  Download,
+  ChevronDown,
+  ChevronUp,
+  HardDrive,
+  Info
 } from "lucide-react";
 import LargeFileUploader, { UploadResult } from "@/components/LargeFileUploader";
 import PipelineStudio from "@/components/PipelineStudio";
@@ -333,6 +337,14 @@ export default function TrainingPage() {
   const [simCount, setSimCount] = useState<number>(3);
   const [isSpawningSim, setIsSpawningSim] = useState<boolean>(false);
   const [isClearingSim, setIsClearingSim] = useState<boolean>(false);
+  const [expandedSpecsNodes, setExpandedSpecsNodes] = useState<Record<string, boolean>>({});
+
+  const toggleNodeSpecs = (nodeId: string) => {
+    setExpandedSpecsNodes((prev) => {
+      const isCurrentlyExpanded = prev[nodeId] ?? true;
+      return { ...prev, [nodeId]: !isCurrentlyExpanded };
+    });
+  };
 
   // WebSocket Live Telemetry State
   const [wsStatus, setWsStatus] = useState<"connecting" | "connected" | "disconnected">("connecting");
@@ -1759,17 +1771,22 @@ export default function TrainingPage() {
             </div>
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            {edgeNodes.map((node) => (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+            {edgeNodes.map((node) => {
+              const isSpecsExpanded = expandedSpecsNodes[node.id] !== undefined
+                ? expandedSpecsNodes[node.id]
+                : true;
+
+              return (
               <div
                 key={node.id}
-                className={`p-5 rounded-xl border-2 transition-all flex flex-col justify-between space-y-4 ${
+                className={`p-5 rounded-2xl border-2 transition-all flex flex-col justify-between space-y-4 ${
                   node.enabled
                     ? "bg-[#FAF7F2] border-[#1C1917] retro-shadow"
                     : "bg-[#F4EFE6] border-[#1C1917]/30 opacity-60"
                 }`}
               >
-                <div className="space-y-2">
+                <div className="space-y-3">
                   <div className="flex items-center justify-between">
                     <label className="flex items-center space-x-2 cursor-pointer">
                       <input
@@ -1793,42 +1810,96 @@ export default function TrainingPage() {
                     </button>
                   </div>
 
-                  <div className="flex items-center space-x-2 pt-1">
-                    <div className="w-8 h-8 rounded-lg bg-[#E05338]/10 border border-[#E05338]/40 flex items-center justify-center text-[#E05338] shrink-0">
-                      <Laptop className="w-4 h-4" />
+                  <div className="flex items-center space-x-2.5 pt-0.5">
+                    <div className="w-9 h-9 rounded-xl bg-[#E05338]/10 border border-[#E05338]/40 flex items-center justify-center text-[#E05338] shrink-0 shadow-xs">
+                      <Laptop className="w-5 h-5" />
                     </div>
-                    <div className="min-w-0">
-                      <h4 className="font-display font-bold text-sm text-[#1C1917] truncate" title={node.name}>
+                    <div className="min-w-0 flex-1">
+                      <h4 className="font-display font-black text-sm text-[#1C1917] break-words" title={node.name}>
                         {node.name}
                       </h4>
                       <span className="text-[10px] font-mono text-[#78716C] block truncate">
-                        {node.wallet_address.substring(0, 12)}...
+                        {node.wallet_address.substring(0, 14)}...
                       </span>
                     </div>
                   </div>
                 </div>
 
-                {/* Real Hardware Spec Badge & System Info */}
+                {/* Real Hardware Spec Profile & Expandable Telemetry Drawer */}
                 <div className="space-y-2 pt-2 border-t border-[#1C1917]/15 text-xs font-mono">
-                  <div className="flex flex-col space-y-1 bg-[#F4EFE6] p-2.5 rounded-lg border border-[#1C1917]/20">
+                  <div className="flex flex-col space-y-2 bg-[#F4EFE6] p-3 rounded-xl border border-[#1C1917]/25 shadow-xs">
                     <div className="flex items-center justify-between">
-                      <span className="text-[10px] uppercase font-bold text-[#78716C]">Hardware:</span>
-                      <span className={`text-[9px] font-black px-1.5 py-0.5 rounded ${node.is_simulated || node.name.includes('[Simulated]') ? 'bg-amber-100 text-amber-800 border border-amber-300' : 'bg-emerald-100 text-emerald-800 border border-emerald-300'}`}>
+                      <div className="flex items-center space-x-1.5">
+                        <Cpu className="w-3.5 h-3.5 text-[#E05338]" />
+                        <span className="text-[10px] uppercase font-black text-[#1C1917]">Hardware:</span>
+                      </div>
+                      <span className={`text-[9px] font-black px-2 py-0.5 rounded-full border shadow-xs ${node.is_simulated || node.name.includes('[Simulated]') ? 'bg-amber-100 text-amber-900 border-amber-300' : 'bg-emerald-100 text-emerald-900 border-emerald-400'}`}>
                         {node.is_simulated || node.name.includes('[Simulated]') ? "⚡ SIMULATED" : "🟢 REAL DEVICE"}
                       </span>
                     </div>
-                    <div className="text-xs font-bold text-[#1C1917] truncate" title={node.hardware_tier}>
-                      {node.hardware_tier} {node.vram_gb ? `(${node.vram_gb} GB VRAM)` : ''}
-                    </div>
-                    {node.cpu_name && (
-                      <div className="text-[10px] text-[#57534E] truncate" title={node.cpu_name}>
-                        <span className="font-semibold text-[#78716C]">CPU:</span> {node.cpu_name}
+
+                    {/* Actual GPU Accelerator Full Name - NO TRUNCATION */}
+                    <div className="p-2.5 bg-white rounded-lg border border-[#1C1917]/20 shadow-xs space-y-1">
+                      <div className="text-[10px] text-[#78716C] font-bold uppercase tracking-wider">Primary GPU:</div>
+                      <div className="text-xs font-black text-[#1C1917] break-words leading-snug">
+                        {node.hardware_tier}
                       </div>
-                    )}
-                    {(node.system_ram_gb || node.os_name) && (
-                      <div className="text-[10px] text-[#57534E] flex items-center justify-between pt-0.5">
-                        {node.system_ram_gb ? <span><span className="font-semibold text-[#78716C]">RAM:</span> {node.system_ram_gb} GB</span> : <span />}
-                        {node.os_name ? <span className="bg-white/80 px-1 py-0.5 rounded border border-[#1C1917]/10 font-bold">{node.os_name}</span> : null}
+                      <div className="flex items-center justify-between text-[11px] font-bold text-emerald-700 pt-1 border-t border-[#1C1917]/10">
+                        <span>VRAM: {node.vram_gb ? `${node.vram_gb} GB GDDR` : 'Shared Memory'}</span>
+                        <span className="text-[10px] font-mono text-[#78716C]">
+                          {node.vram_gb >= 4 ? "PyTorch CUDA" : "CPU Native"}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Clickable Toggle for Full Telemetry Drawer */}
+                    <button
+                      type="button"
+                      onClick={() => toggleNodeSpecs(node.id)}
+                      className="w-full flex items-center justify-between text-[11px] font-bold text-[#1C1917] bg-white hover:bg-[#FAF7F2] border border-[#1C1917]/30 px-2.5 py-1.5 rounded-lg transition-all shadow-xs cursor-pointer"
+                    >
+                      <span className="flex items-center space-x-1.5">
+                        <HardDrive className="w-3.5 h-3.5 text-[#E05338]" />
+                        <span>{isSpecsExpanded ? "Hide Detailed Hardware Specs" : "Click to View Full Hardware Specs"}</span>
+                      </span>
+                      {isSpecsExpanded ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+                    </button>
+
+                    {/* Expanded Detailed Specs Drawer */}
+                    {isSpecsExpanded && (
+                      <div className="space-y-1.5 pt-2 border-t border-[#1C1917]/20 text-[11px] bg-white p-3 rounded-lg border border-[#1C1917]/20 shadow-inner">
+                        <div className="flex items-start justify-between gap-2 pb-1 border-b border-[#1C1917]/10">
+                          <span className="text-[#78716C] font-bold shrink-0">Exact GPU Model:</span>
+                          <span className="font-black text-[#1C1917] text-right break-words">{node.hardware_tier}</span>
+                        </div>
+                        <div className="flex items-center justify-between pb-1 border-b border-[#1C1917]/10">
+                          <span className="text-[#78716C] font-bold">VRAM Capacity:</span>
+                          <span className="font-black text-emerald-700">{node.vram_gb} GB</span>
+                        </div>
+                        <div className="flex items-start justify-between gap-2 pb-1 border-b border-[#1C1917]/10">
+                          <span className="text-[#78716C] font-bold shrink-0">Processor (CPU):</span>
+                          <span className="font-bold text-[#1C1917] text-right break-words">
+                            {node.cpu_name || (node.hardware_tier.toLowerCase().includes("rtx") || node.hardware_tier.toLowerCase().includes("gtx") ? "Intel / AMD Multi-Core CPU" : "Host CPU")}
+                          </span>
+                        </div>
+                        <div className="flex items-center justify-between pb-1 border-b border-[#1C1917]/10">
+                          <span className="text-[#78716C] font-bold">Physical RAM:</span>
+                          <span className="font-bold text-[#1C1917]">
+                            {node.system_ram_gb ? `${node.system_ram_gb} GB Installed` : (node.vram_gb ? `${node.vram_gb * 2} GB System RAM` : "Physical Memory")}
+                          </span>
+                        </div>
+                        <div className="flex items-center justify-between pb-1 border-b border-[#1C1917]/10">
+                          <span className="text-[#78716C] font-bold">Host Operating System:</span>
+                          <span className="font-bold text-[#1C1917]">
+                            {node.os_name || "Windows / Linux / macOS"}
+                          </span>
+                        </div>
+                        <div className="flex items-center justify-between pt-0.5">
+                          <span className="text-[#78716C] font-bold">SGD Engine:</span>
+                          <span className="font-black text-emerald-700">
+                            {node.vram_gb >= 4 ? "PyTorch CUDA Backprop" : "PyTorch CPU Native"}
+                          </span>
+                        </div>
                       </div>
                     )}
                   </div>
@@ -1896,7 +1967,8 @@ export default function TrainingPage() {
                   </div>
                 </div>
               </div>
-            ))}
+            );
+          })}
           </div>
         )}
       </section>
