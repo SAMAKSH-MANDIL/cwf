@@ -1233,6 +1233,12 @@ export default function TrainingPage() {
                 if (targetKey) {
                   next[targetKey] = [...(next[targetKey] || []), line];
                 }
+                if (matched) {
+                  next[matched.name] = [...(next[matched.name] || []), line];
+                  if (matched.wallet_address) {
+                    next[matched.wallet_address] = [...(next[matched.wallet_address] || []), line];
+                  }
+                }
                 next[tag] = [...(next[tag] || []), line];
                 next["all"] = [...(next["all"] || []), line];
                 return next;
@@ -1456,14 +1462,20 @@ export default function TrainingPage() {
             ? ` | Ranges: ${nodeSlices.map((s) => `[${s.startRow}..${s.endRow}]`).join(", ")} (${node.samples_count} rows)`
             : ` | Assigned: ${node.samples_count} rows`;
 
-        next[node.id] = [
-          ...(next[node.id] || []),
+        const initLines = [
           `--------------------------------------------------------------------------------`,
           `[${ts()}] [DISPATCH] Federated Round triggered by Coordinator. Real-time WebSocket streaming active.`,
           `[${ts()}] [TOPOLOGY] Target Architecture: Input(${inputDim}) -> Dense[${hiddenLayers.join(", ")}] -> Output(${outputDim})`,
           `[${ts()}] [DATA_CONFIG] Target: "${selectedTarget}" | Active Features: ${selectedFeatures.length} dims | Partition: ${partitionMode.toUpperCase()}${sliceDesc}`,
           `[${ts()}] [CLIENT_EXEC] Hardware enclave online: ${node.hardware_tier} (${node.vram_gb} GB VRAM). Commencing real local SGD (${epochs} Epochs, lr=${learningRate}).`,
         ];
+
+        next[node.id] = [...(next[node.id] || []), ...initLines];
+        next[node.name] = [...(next[node.name] || []), ...initLines];
+        if (node.wallet_address) {
+          next[node.wallet_address] = [...(next[node.wallet_address] || []), ...initLines];
+        }
+        next["all"] = [...(next["all"] || []), ...initLines];
       });
       return next;
     });
@@ -3460,9 +3472,35 @@ export default function TrainingPage() {
               suppressHydrationWarning
               className="flex-1 p-4 font-mono text-xs leading-relaxed text-stone-300 overflow-y-auto space-y-1 fedzero-terminal-body"
             >
-              {(nodeLogs[activeLogTab] || nodeLogs[displayedGridNodes.find((n) => n.id === activeLogTab)?.name || ""] || [
-                `[STANDBY] Enclave sandbox mounted. Ready for training dispatch.`,
-              ]).map((l, i) => renderFormattedLogLine(l, i))}
+              {(() => {
+                const targetNode = displayedGridNodes.find(
+                  (n) => n.id === activeLogTab || n.name === activeLogTab || n.wallet_address === activeLogTab
+                );
+                const keys = [
+                  activeLogTab,
+                  targetNode?.id,
+                  targetNode?.name,
+                  targetNode?.wallet_address,
+                ].filter(Boolean) as string[];
+
+                const linesSet = new Set<string>();
+                const mergedLines: string[] = [];
+                keys.forEach((k) => {
+                  (nodeLogs[k] || []).forEach((l) => {
+                    if (!linesSet.has(l)) {
+                      linesSet.add(l);
+                      mergedLines.push(l);
+                    }
+                  });
+                });
+
+                const displayLines =
+                  mergedLines.length > 0
+                    ? mergedLines
+                    : [`[STANDBY] Enclave sandbox mounted. Ready for training dispatch.`];
+
+                return displayLines.map((l, i) => renderFormattedLogLine(l, i));
+              })()}
               <div ref={logsEndRef} />
             </div>
           </div>
