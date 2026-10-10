@@ -387,6 +387,10 @@ class NetworkOrchestrator:
             "samples_count": samples_count,
             "status": "ONLINE",
         })
+        ws_manager.broadcast_sync("NODES_UPDATED", {
+            "active_clients": len(self.fl_coordinator.clients),
+            "providers": self.solana.get_all_providers(),
+        })
 
         hw_desc = f"{hardware_tier} ({vram_gb} GB VRAM)"
         if cpu_name:
@@ -411,13 +415,169 @@ class NetworkOrchestrator:
             "current_round": self.fl_coordinator.current_round,
         }
 
-    def get_worker_job(self, identifier: str, wallet: Optional[str] = None) -> Dict[str, Any]:
+    def update_node_hardware(
+        self,
+        identifier: str,
+        wallet_address: Optional[str] = None,
+        cpu_name: Optional[str] = None,
+        system_ram_gb: Optional[int] = None,
+        os_name: Optional[str] = None,
+        hardware_tier: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """
+        Dynamically updates hardware specs for an edge device across in-memory registry,
+        Solana PDA records, and persistent SQLite database.
+        """
+        norm_id = identifier.lower().strip()
+        w_norm = (wallet_address or "").lower().strip()
+        updated = False
+
+        # Filter out bogus fallback strings
+        if cpu_name and (" / AMD " in cpu_name or cpu_name == "Host Multi-Core CPU"):
+            cpu_name = None
+
+        # 1. Update registered_workers
+        for key in [norm_id, w_norm]:
+            if key and key in self.registered_workers:
+                target = self.registered_workers[key]
+                if cpu_name and target.get("cpu_name") != cpu_name:
+                    target["cpu_name"] = cpu_name
+                    updated = True
+                if system_ram_gb and target.get("system_ram_gb") != system_ram_gb:
+                    target["system_ram_gb"] = system_ram_gb
+                    updated = True
+                if os_name and target.get("os_name") != os_name:
+                    target["os_name"] = os_name
+                    updated = True
+                if hardware_tier and target.get("hardware_tier") != hardware_tier:
+                    target["hardware_tier"] = hardware_tier
+                    updated = True
+
+        # 2. Update Solana providers
+        for addr, prov in list(self.solana.providers.items()):
+            if (w_norm and addr == w_norm) or prov.get("device_name", "").lower() == norm_id:
+                if cpu_name and prov.get("cpu_name") != cpu_name:
+                    prov["cpu_name"] = cpu_name
+                    updated = True
+                if system_ram_gb and prov.get("system_ram_gb") != system_ram_gb:
+                    prov["system_ram_gb"] = system_ram_gb
+                    updated = True
+                if os_name and prov.get("os_name") != os_name:
+                    prov["os_name"] = os_name
+                    updated = True
+                if hardware_tier and prov.get("hardware_tier") != hardware_tier:
+                    prov["hardware_tier"] = hardware_tier
+                    updated = True
+
+        # 3. Update persistent database
+        try:
+            from backend.database.session import SessionLocal
+            from backend.database.models import ComputeProviderRecord
+            with SessionLocal() as db:
+                q = db.query(ComputeProviderRecord)
+                rec = None
+                if wallet_address:
+                    rec = q.filter(ComputeProviderRecord.wallet_address == wallet_address).first()
+                if not rec and identifier:
+                    rec = q.filter(ComputeProviderRecord.device_name == identifier).first()
+                if rec:
+                    if cpu_name and rec.cpu_name != cpu_name:
+                        rec.cpu_name = cpu_name
+                        updated = True
+                    if system_ram_gb and rec.system_ram_gb != system_ram_gb:
+                        rec.system_ram_gb = system_ram_gb
+                        updated = True
+                    if os_name and rec.os_name != os_name:
+                        rec.os_name = os_name
+                        updated = True
+                    if hardware_tier and rec.hardware_tier != hardware_tier:
+                        rec.hardware_tier = hardware_tier
+                        updated = True
+                    db.commit()
+        except Exception:
+            pass
+
+        # 4. Broadcast updated worker state to frontend if changed
+        if updated:
+            ws_manager.broadcast_sync("WORKER_UPDATED", {
+                "node_name": identifier,
+                "wallet_address": wallet_address,
+                "cpu_name": cpu_name,
+                "system_ram_gb": system_ram_gb,
+                "os_name": os_name,
+                "hardware_tier": hardware_tier,
+            })
+            ws_manager.broadcast_sync("NODES_UPDATED", {
+                "active_clients": len(self.fl_coordinator.clients),
+                "providers": self.solana.get_all_providers(),
+            })
+
+        return {"success": True, "updated": updated}
+
+    def get_worker_job(
+        self,
+        identifier: str,
+        wallet: Optional[str] = None,
+        cpu_name: Optional[str] = None,
+        system_ram_gb: Optional[Any] = None,
+        os_name: Optional[str] = None,
+        hardware_tier: Optional[str] = None,
+        vram_gb: Optional[Any] = None,
+    ) -> Dict[str, Any]:
         """Returns the pending training job for a worker daemon, or standby state."""
         norm_id = identifier.lower().strip()
+        w_norm = (wallet or "").lower().strip()
+
+        # Self-healing auto-registration:
+        # If an active worker daemon is polling but not yet in solana provider registry, register it immediately!
+        is_in_solana = any(
+            (p.get("device_name", "").lower() == norm_id) or (w_norm and p.get("wallet_address", "").lower() == w_norm)
+            for p in self.solana.get_all_providers()
+        )
+
+        if not is_in_solana:
+            ram_val = 16
+            try:
+                if system_ram_gb is not None:
+                    ram_val = int(round(float(system_ram_gb)))
+            except Exception:
+                pass
+
+            vram_val = 6
+            try:
+                if vram_gb is not None:
+                    vram_val = int(round(float(vram_gb)))
+            except Exception:
+                pass
+
+            hw_val = hardware_tier or "NVIDIA GeForce RTX 3050 6GB Laptop GPU"
+
+            self.register_worker_daemon(
+                node_name=identifier,
+                hardware_tier=hw_val,
+                vram_gb=vram_val,
+                samples_count=120,
+                wallet_address=wallet,
+                cpu_name=cpu_name or "14th Gen Intel Core i5-14450HX",
+                os_name=os_name or "Windows 11",
+                system_ram_gb=ram_val,
+            )
+
+        # Update telemetry if provided
+        if cpu_name or system_ram_gb or os_name:
+            self.update_node_hardware(
+                identifier=identifier,
+                wallet_address=wallet,
+                cpu_name=cpu_name,
+                system_ram_gb=int(round(float(system_ram_gb))) if system_ram_gb else None,
+                os_name=os_name,
+                hardware_tier=hardware_tier,
+            )
+
         if norm_id in self.registered_workers:
             self.registered_workers[norm_id]["last_seen"] = time.time()
-        if wallet and wallet.lower() in self.registered_workers:
-            self.registered_workers[wallet.lower()]["last_seen"] = time.time()
+        if w_norm and w_norm in self.registered_workers:
+            self.registered_workers[w_norm]["last_seen"] = time.time()
 
         if self.worker_jobs.get("active"):
             job = self.worker_jobs

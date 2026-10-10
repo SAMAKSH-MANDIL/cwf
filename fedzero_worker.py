@@ -18,6 +18,7 @@ import json
 import argparse
 import urllib.request
 import urllib.error
+import urllib.parse
 import importlib.util
 import subprocess
 
@@ -485,15 +486,41 @@ def detect_real_system_hardware():
 
     # 2. CPU Model & Cores
     cpu_cores = os.cpu_count() or 4
-    cpu_name = platform.processor() or platform.machine()
+    cpu_name = ""
     if platform.system() == "Windows":
+        # 1. Direct Windows NT Registry lookup (instant, 100% reliable on Win 10/11)
         try:
-            out = subprocess.check_output("wmic cpu get name", shell=True, text=True, timeout=2)
-            lines = [l.strip() for l in out.strip().split("\n") if l.strip() and "Name" not in l]
-            if lines:
-                cpu_name = lines[0]
+            import winreg
+            key = winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, r"HARDWARE\DESCRIPTION\System\CentralProcessor\0")
+            val, _ = winreg.QueryValueEx(key, "ProcessorNameString")
+            if val and str(val).strip():
+                cpu_name = str(val).strip()
         except Exception:
             pass
+
+        # 2. Native PowerShell CIM query fallback
+        if not cpu_name or "Family" in cpu_name:
+            try:
+                out = subprocess.check_output(
+                    ["powershell", "-NoProfile", "-Command", "(Get-CimInstance Win32_Processor).Name"],
+                    text=True,
+                    timeout=3,
+                    creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0)
+                )
+                if out.strip():
+                    cpu_name = out.strip().split("\n")[0].strip()
+            except Exception:
+                pass
+
+        # 3. WMIC fallback for older Windows
+        if not cpu_name or "Family" in cpu_name:
+            try:
+                out = subprocess.check_output("wmic cpu get name", shell=True, text=True, timeout=2)
+                lines = [l.strip() for l in out.strip().split("\n") if l.strip() and "Name" not in l]
+                if lines:
+                    cpu_name = lines[0]
+            except Exception:
+                pass
     elif platform.system() == "Darwin":
         try:
             out = subprocess.check_output(["sysctl", "-n", "machdep.cpu.brand_string"], text=True, timeout=2)
@@ -510,6 +537,13 @@ def detect_real_system_hardware():
                         break
         except Exception:
             pass
+
+    if not cpu_name or "Family" in cpu_name:
+        fallback_p = platform.processor() or platform.machine()
+        if fallback_p and "Family" not in fallback_p:
+            cpu_name = fallback_p
+        elif not cpu_name:
+            cpu_name = "Intel / AMD Multi-Core CPU"
 
     # 3. Total System Physical RAM (in GB)
     ram_gb = 16
@@ -610,8 +644,10 @@ def detect_real_system_hardware():
         except Exception:
             pass
 
-    # Clean label
-    clean_cpu = cpu_name.replace("Intel(R) Core(TM)", "Intel").replace("Processor", "").replace("with Radeon Graphics", "").strip()
+    # Clean label without losing genuine processor identity
+    clean_cpu = " ".join(cpu_name.replace("(R)", "").replace("(TM)", "").replace("Processor", "").split())
+    if not clean_cpu or "Family" in clean_cpu:
+        clean_cpu = "Intel / AMD Multi-Core CPU"
     if gpu_name and vram_gb > 0:
         hardware_tier = f"{gpu_name} ({vram_gb} GB VRAM)"
         primary_mem = vram_gb
@@ -702,8 +738,8 @@ def main():
     reg_payload = {
         "name": node_name,
         "hardware_tier": hardware_tier,
-        "vram_gb": float(vram_gb),
-        "system_ram_gb": float(real_specs["system_ram_gb"]),
+        "vram_gb": int(round(float(vram_gb))),
+        "system_ram_gb": int(round(float(real_specs["system_ram_gb"]))),
         "cpu_name": real_specs["cpu_name"],
         "os_name": real_specs["os_name"],
         "samples_count": len(y_local),
@@ -724,7 +760,17 @@ def main():
 
     try:
         while True:
-            poll_res = http_get(f"{server_url}/api/worker/poll-job?identifier={node_name}&wallet={wallet_address}")
+            poll_params = {
+                "identifier": node_name,
+                "wallet": wallet_address,
+                "hardware_tier": hardware_tier,
+                "vram_gb": str(int(round(float(vram_gb)))),
+                "cpu_name": real_specs.get("cpu_name", ""),
+                "system_ram_gb": str(int(round(float(real_specs.get("system_ram_gb", 16))))),
+                "os_name": real_specs.get("os_name", ""),
+            }
+            query_str = urllib.parse.urlencode(poll_params)
+            poll_res = http_get(f"{server_url}/api/worker/poll-job?{query_str}")
 
             if poll_res and poll_res.get("has_job"):
                 round_id = poll_res.get("round_id")

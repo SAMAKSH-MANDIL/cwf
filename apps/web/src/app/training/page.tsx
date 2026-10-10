@@ -306,7 +306,30 @@ export default function TrainingPage() {
     reader.readAsText(file);
   };
 
+  const [uploadedDatasetMeta, setUploadedDatasetMeta] = useState<UploadResult | null>(null);
+
+  // Auto-load currently uploaded dataset on mount if available
+  useEffect(() => {
+    fetch("/api/datasets/current-upload")
+      .then((res) => res.json())
+      .then((data) => {
+        if (data && data.has_upload) {
+          setUploadedDatasetMeta(data as UploadResult);
+          if (data.preview_text) {
+            setCustomCsvText(data.preview_text);
+            if (data.headers && data.headers.length > 0) {
+              const lastCol = data.headers[data.headers.length - 1];
+              setSelectedTarget(lastCol);
+              setSelectedFeatures(data.headers.filter((c: string) => c !== lastCol));
+            }
+          }
+        }
+      })
+      .catch((e) => console.error("Failed to load current uploaded dataset", e));
+  }, []);
+
   const handleLargeUploadSuccess = (result: UploadResult) => {
+    setUploadedDatasetMeta(result);
     if (result.preview_text) {
       setCustomCsvText(result.preview_text);
       if (result.headers && result.headers.length > 0) {
@@ -324,14 +347,17 @@ export default function TrainingPage() {
   // =========================================================================
   const [partitionMode, setPartitionMode] = useState<"equal" | "manual">("equal");
 
-  // Dynamic total dataset row count (synthetic preset rows or parsed custom CSV rows)
+  // Dynamic total dataset row count (synthetic preset rows, large uploaded CSV rows, or custom CSV textarea rows)
   const totalDatasetRecords = useMemo(() => {
     if (datasetMode === "synthetic") {
       return activePreset.rowsCount;
     }
+    if (uploadedDatasetMeta && uploadedDatasetMeta.total_rows > 0) {
+      return uploadedDatasetMeta.total_rows;
+    }
     const lines = customCsvText.trim().split("\n").filter((l) => l.trim().length > 0);
     return Math.max(1, lines.length - 1);
-  }, [datasetMode, activePreset.rowsCount, customCsvText]);
+  }, [datasetMode, activePreset.rowsCount, customCsvText, uploadedDatasetMeta]);
 
   const [edgeNodes, setEdgeNodes] = useState<EdgeNode[]>([]);
   const [simCount, setSimCount] = useState<number>(3);
@@ -685,7 +711,7 @@ export default function TrainingPage() {
         if (!next[node.id] || next[node.id].length === 0) {
           next[node.id] = [
             `[${ts}] [ENV_INIT] Initialized hardware enclave sandbox for "${node.name}" (${node.hardware_tier}).`,
-            `[${ts}] [LOCAL_DATA] Secure partition mounted with ${node.samples_count} private biomarker samples.`,
+            `[${ts}] [LOCAL_DATA] Secure partition mounted with ${(node.samples_count || 0).toLocaleString()} private records.`,
             `[${ts}] [NODE_READY] Worker daemon listening. Standby for federated dispatch instruction.`,
           ];
         }
@@ -772,7 +798,15 @@ export default function TrainingPage() {
                 if (exists) {
                   return prev.map((p) =>
                     p.wallet_address.toLowerCase() === wKey || p.name.toLowerCase() === nKey
-                      ? { ...p, enabled: true, hardware_tier: data.hardware_tier, vram_gb: data.vram_gb }
+                      ? {
+                          ...p,
+                          enabled: true,
+                          hardware_tier: data.hardware_tier,
+                          vram_gb: data.vram_gb,
+                          cpu_name: data.cpu_name,
+                          os_name: data.os_name,
+                          system_ram_gb: data.system_ram_gb,
+                        }
                       : p
                   );
                 } else {
@@ -783,12 +817,38 @@ export default function TrainingPage() {
                       name: data.node_name,
                       hardware_tier: data.hardware_tier,
                       vram_gb: data.vram_gb,
+                      cpu_name: data.cpu_name,
+                      os_name: data.os_name,
+                      system_ram_gb: data.system_ram_gb,
                       samples_count: data.samples_count || 120,
                       wallet_address: data.wallet_address,
                       enabled: true,
                     },
                   ];
                 }
+              });
+            } else if (evtType === "NODES_UPDATED" && Array.isArray(data?.providers)) {
+              setEdgeNodes((prev) => {
+                const prevMap = new Map(prev.map((p) => [(p.wallet_address || "").toLowerCase(), p]));
+                const prevNameMap = new Map(prev.map((p) => [(p.name || "").toLowerCase(), p]));
+                return data.providers.map((d: any, idx: number) => {
+                  const wKey = (d.wallet_address || "").toLowerCase();
+                  const nKey = (d.device_name || "").toLowerCase();
+                  const existing = prevMap.get(wKey) || prevNameMap.get(nKey);
+                  return {
+                    id: d.wallet_address || `node-${idx + 1}`,
+                    name: d.device_name || `Edge Node ${idx + 1}`,
+                    hardware_tier: d.hardware_tier || existing?.hardware_tier || "Auto-Detected",
+                    vram_gb: d.declared_vram_gb ?? d.vram_gb ?? existing?.vram_gb ?? 6,
+                    cpu_name: d.cpu_name,
+                    os_name: d.os_name,
+                    system_ram_gb: d.system_ram_gb,
+                    samples_count: existing?.samples_count ?? (d.samples_count || 120),
+                    wallet_address: d.wallet_address || `0x...`,
+                    enabled: existing ? existing.enabled : true,
+                    is_simulated: (d.device_name || "").includes("[Simulated]"),
+                  };
+                });
               });
             } else if (evtType === "ROUND_STARTED") {
               setIsTraining(true);
@@ -1292,7 +1352,9 @@ export default function TrainingPage() {
               <label className="text-xs font-mono font-bold text-[#1C1917] uppercase flex items-center justify-between">
                 <span>Or Paste / Edit CSV Plaintext:</span>
                 <span className="text-[11px] text-[#2563EB] font-bold bg-[#FAF7F2] px-2 py-0.5 rounded border border-[#1C1917]/25">
-                  Parsed: {totalDatasetRecords} Data Rows
+                  {uploadedDatasetMeta && uploadedDatasetMeta.total_rows > 0
+                    ? `Ingested: ${uploadedDatasetMeta.total_rows.toLocaleString()} Total Rows (${Math.max(0, customCsvText.trim().split("\n").length - 1)} Sample Preview)`
+                    : `Parsed: ${totalDatasetRecords.toLocaleString()} Data Rows`}
                 </span>
               </label>
               <textarea
@@ -1601,11 +1663,11 @@ export default function TrainingPage() {
               <Database className="w-3.5 h-3.5 text-[#2563EB]" />
             </div>
             <div className="text-2xl font-black text-[#1C1917] mt-1 flex items-baseline space-x-1.5">
-              <span>{totalDatasetRecords}</span>
+              <span>{totalDatasetRecords.toLocaleString()}</span>
               <span className="text-xs font-normal text-[#78716C]">Total Samples</span>
             </div>
             <div className="text-[10px] text-[#2563EB] font-bold mt-1 truncate">
-              {datasetMode === "synthetic" ? `Preset: ${activePreset.name}` : "Custom Uploaded CSV Dataset"}
+              {datasetMode === "synthetic" ? `Preset: ${activePreset.name}` : (uploadedDatasetMeta?.filename || "Custom Uploaded CSV Dataset")}
             </div>
           </div>
 
@@ -1615,7 +1677,7 @@ export default function TrainingPage() {
               <Split className="w-3.5 h-3.5 text-emerald-600" />
             </div>
             <div className="text-2xl font-black text-emerald-700 mt-1 flex items-baseline space-x-1.5">
-              <span>{allocatedRows}</span>
+              <span>{allocatedRows.toLocaleString()}</span>
               <span className="text-xs font-normal text-[#78716C]">
                 Rows ({Math.round((allocatedRows / Math.max(1, totalDatasetRecords)) * 100)}%)
               </span>
@@ -1653,7 +1715,7 @@ export default function TrainingPage() {
                     : "text-red-600"
                 }`}
               >
-                <span>{remainingRows}</span>
+                <span>{remainingRows.toLocaleString()}</span>
                 <span className="text-xs font-normal text-[#78716C]">Rows</span>
               </div>
             </div>
@@ -1663,7 +1725,7 @@ export default function TrainingPage() {
                 onClick={distributeRemainingRows}
                 className="mt-2 px-2.5 py-1 text-[10px] font-bold bg-[#F4EFE6] hover:bg-[#1C1917] hover:text-white border border-[#1C1917] rounded transition-all text-center"
               >
-                + Auto-Fill Remaining (+{remainingRows} rows)
+                + Auto-Fill Remaining (+{remainingRows.toLocaleString()} rows)
               </button>
             )}
           </div>
@@ -1876,12 +1938,14 @@ export default function TrainingPage() {
                           <span className="text-[#78716C] font-bold">VRAM Capacity:</span>
                           <span className="font-black text-emerald-700">{node.vram_gb} GB</span>
                         </div>
-                        <div className="flex items-start justify-between gap-2 pb-1 border-b border-[#1C1917]/10">
-                          <span className="text-[#78716C] font-bold shrink-0">Processor (CPU):</span>
-                          <span className="font-bold text-[#1C1917] text-right break-words">
-                            {node.cpu_name || (node.hardware_tier.toLowerCase().includes("rtx") || node.hardware_tier.toLowerCase().includes("gtx") ? "Intel / AMD Multi-Core CPU" : "Host CPU")}
-                          </span>
-                        </div>
+                        {node.cpu_name && !node.cpu_name.includes(" / AMD ") && !node.cpu_name.includes("Host Multi-Core") ? (
+                          <div className="flex items-start justify-between gap-2 pb-1 border-b border-[#1C1917]/10">
+                            <span className="text-[#78716C] font-bold shrink-0">Processor (CPU):</span>
+                            <span className="font-bold text-[#1C1917] text-right break-words">
+                              {node.cpu_name}
+                            </span>
+                          </div>
+                        ) : null}
                         <div className="flex items-center justify-between pb-1 border-b border-[#1C1917]/10">
                           <span className="text-[#78716C] font-bold">Physical RAM:</span>
                           <span className="font-bold text-[#1C1917]">
@@ -1910,7 +1974,7 @@ export default function TrainingPage() {
                       <div className="flex items-center justify-between text-[11px]">
                         <span className="text-[#78716C]">Assigned Rows:</span>
                         <span className="font-black text-sm text-[#1C1917] bg-white px-2 py-0.5 rounded border border-[#1C1917]">
-                          {node.samples_count} rows
+                          {node.samples_count.toLocaleString()} rows
                         </span>
                       </div>
                       <div className="text-[10px] text-[#78716C]">
@@ -1956,7 +2020,7 @@ export default function TrainingPage() {
 
                       <div className="flex items-center justify-between text-[10px] text-[#78716C] pt-0.5">
                         <span>Direct numeric input</span>
-                        <span className="font-bold text-[#1C1917]">{node.samples_count} rows assigned</span>
+                        <span className="font-bold text-[#1C1917]">{(node.samples_count || 0).toLocaleString()} rows assigned</span>
                       </div>
                     </div>
                   )}
@@ -2425,7 +2489,7 @@ export default function TrainingPage() {
 
                   {/* Terminal Footer status */}
                   <div className="px-3 py-1.5 bg-[#101013] border-t border-stone-800 text-[10px] font-mono text-stone-500 flex items-center justify-between">
-                    <span>{node.samples_count} Local Records</span>
+                    <span>{node.samples_count?.toLocaleString()} Local Records</span>
                     <span className="text-emerald-400 font-bold">TEE ENCLAVE ACTIVE</span>
                   </div>
                 </div>

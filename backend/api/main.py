@@ -460,34 +460,93 @@ def clear_simulated_nodes():
 # -------------------------------------------------------------
 class WorkerRegisterRequest(BaseModel):
     name: str
-    hardware_tier: str = "Auto-Detected"
-    vram_gb: int = 6
+    hardware_tier: Optional[str] = "Auto-Detected"
+    vram_gb: Optional[Any] = 6
     cpu_name: Optional[str] = None
     os_name: Optional[str] = None
-    system_ram_gb: Optional[int] = None
-    samples_count: int = 120
+    system_ram_gb: Optional[Any] = 16
+    samples_count: Optional[Any] = 120
     wallet_address: Optional[str] = None
 
 
 @app.post("/api/worker/register")
 def register_worker(payload: WorkerRegisterRequest):
     """Registers a real external worker daemon (Laptop 2 / Mac / Linux)."""
+    vram_val = 6
+    try:
+        if payload.vram_gb is not None:
+            vram_val = int(round(float(payload.vram_gb)))
+    except Exception:
+        pass
+
+    ram_val = 16
+    try:
+        if payload.system_ram_gb is not None:
+            ram_val = int(round(float(payload.system_ram_gb)))
+    except Exception:
+        pass
+
+    samples_val = 120
+    try:
+        if payload.samples_count is not None:
+            samples_val = int(payload.samples_count)
+    except Exception:
+        pass
+
     return orchestrator.register_worker_daemon(
         node_name=payload.name,
-        hardware_tier=payload.hardware_tier,
-        vram_gb=payload.vram_gb,
-        samples_count=payload.samples_count,
+        hardware_tier=payload.hardware_tier or "Auto-Detected",
+        vram_gb=vram_val,
+        samples_count=samples_val,
         wallet_address=payload.wallet_address,
         cpu_name=payload.cpu_name,
         os_name=payload.os_name,
-        system_ram_gb=payload.system_ram_gb,
+        system_ram_gb=ram_val,
+    )
+
+
+class UpdateHardwareRequest(BaseModel):
+    identifier: str
+    wallet_address: Optional[str] = None
+    cpu_name: Optional[str] = None
+    system_ram_gb: Optional[Any] = None
+    os_name: Optional[str] = None
+    hardware_tier: Optional[str] = None
+
+
+@app.post("/api/nodes/update-hardware")
+def update_node_hardware(payload: UpdateHardwareRequest):
+    """Dynamically updates telemetry / hardware information for an edge node."""
+    return orchestrator.update_node_hardware(
+        identifier=payload.identifier,
+        wallet_address=payload.wallet_address,
+        cpu_name=payload.cpu_name,
+        system_ram_gb=int(round(float(payload.system_ram_gb))) if payload.system_ram_gb else None,
+        os_name=payload.os_name,
+        hardware_tier=payload.hardware_tier,
     )
 
 
 @app.get("/api/worker/poll-job")
-def poll_worker_job(identifier: str = "LOQ_Vinu", wallet: Optional[str] = None):
+def poll_worker_job(
+    identifier: str = "LOQ_Vinu",
+    wallet: Optional[str] = None,
+    cpu_name: Optional[str] = None,
+    system_ram_gb: Optional[Any] = None,
+    os_name: Optional[str] = None,
+    hardware_tier: Optional[str] = None,
+    vram_gb: Optional[Any] = None,
+):
     """Polls for pending federated round training jobs for a worker node."""
-    return orchestrator.get_worker_job(identifier=identifier, wallet=wallet)
+    return orchestrator.get_worker_job(
+        identifier=identifier,
+        wallet=wallet,
+        cpu_name=cpu_name,
+        system_ram_gb=system_ram_gb,
+        os_name=os_name,
+        hardware_tier=hardware_tier,
+        vram_gb=vram_gb,
+    )
 
 
 @app.post("/api/worker/submit-update")
@@ -686,6 +745,60 @@ async def upload_dataset_file(file: UploadFile = File(...)):
         "filename": clean_name,
         "size_bytes": total_bytes,
         "size_formatted": f"{total_bytes / (1024 * 1024):.2f} MB" if total_bytes >= 1024*1024 else f"{total_bytes / 1024:.1f} KB",
+        "total_rows": total_rows,
+        "headers": headers,
+        "preview_rows": preview_rows,
+        "preview_text": preview_text,
+        "storage_path": target_path,
+    }
+
+
+@app.get("/api/datasets/current-upload")
+def get_current_uploaded_dataset():
+    """
+    Returns metadata for the most recently uploaded dataset file so UI seamlessly
+    retains total rows, columns, and previews across reloads.
+    """
+    storage_dir = os.path.join("storage", "datasets")
+    if not os.path.exists(storage_dir):
+        return {"has_upload": False}
+    files = [
+        f for f in os.listdir(storage_dir)
+        if not f.startswith(".") and os.path.isfile(os.path.join(storage_dir, f))
+    ]
+    if not files:
+        return {"has_upload": False}
+    # Pick the most recently modified file
+    files.sort(key=lambda f: os.path.getmtime(os.path.join(storage_dir, f)), reverse=True)
+    latest_file = files[0]
+    target_path = os.path.join(storage_dir, latest_file)
+    size_bytes = os.path.getsize(target_path)
+
+    total_rows = 0
+    headers = []
+    preview_rows = []
+    first_lines = []
+    try:
+        with open(target_path, "r", encoding="utf-8", errors="ignore") as f_in:
+            first_line = f_in.readline()
+            if first_line:
+                first_lines.append(first_line)
+                headers = [h.strip().replace('"', '').replace("'", "") for h in first_line.split(",") if h.strip()]
+            for line in f_in:
+                total_rows += 1
+                if len(preview_rows) < 8:
+                    first_lines.append(line)
+                    vals = [v.strip().replace('"', '').replace("'", "") for v in line.split(",")]
+                    preview_rows.append(vals)
+    except Exception:
+        pass
+
+    preview_text = "".join(first_lines)
+    return {
+        "has_upload": True,
+        "filename": latest_file,
+        "size_bytes": size_bytes,
+        "size_formatted": f"{size_bytes / (1024 * 1024):.2f} MB" if size_bytes >= 1024*1024 else f"{size_bytes / 1024:.1f} KB",
         "total_rows": total_rows,
         "headers": headers,
         "preview_rows": preview_rows,
