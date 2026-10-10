@@ -388,6 +388,9 @@ class RegisterDeviceRequest(BaseModel):
     name: str
     hardware_tier: str = "RTX4090"
     vram_gb: int = 16
+    cpu_name: Optional[str] = None
+    os_name: Optional[str] = None
+    system_ram_gb: Optional[int] = None
     samples_count: int = 220
     wallet_address: Optional[str] = None
 
@@ -408,6 +411,9 @@ def register_device(payload: RegisterDeviceRequest):
         vram_gb=payload.vram_gb,
         samples_count=payload.samples_count,
         wallet_address=payload.wallet_address,
+        cpu_name=payload.cpu_name,
+        os_name=payload.os_name,
+        system_ram_gb=payload.system_ram_gb,
     )
     return result
 
@@ -431,13 +437,34 @@ def delete_device(identifier: Optional[str] = None, payload: Optional[DeleteDevi
     return {"success": True, "deleted": target}
 
 
+class SpawnSimulatedNodesRequest(BaseModel):
+    count: int = 3
+
+
+@app.post("/api/nodes/spawn-simulated")
+def spawn_simulated_nodes(payload: SpawnSimulatedNodesRequest):
+    """Spawns specified number of simulated nodes on demand for testing on root node."""
+    nodes = orchestrator.spawn_simulated_nodes(count=payload.count)
+    return {"success": True, "count": len(nodes), "nodes": nodes}
+
+
+@app.post("/api/nodes/clear-simulated")
+def clear_simulated_nodes():
+    """Clears all simulated nodes on root node."""
+    result = orchestrator.clear_simulated_nodes()
+    return {"success": True, "result": result}
+
+
 # -------------------------------------------------------------
 # Native Edge Worker Daemon APIs (Cross-Platform Distributed Compute)
 # -------------------------------------------------------------
 class WorkerRegisterRequest(BaseModel):
     name: str
-    hardware_tier: str = "GTX 1650/RTX 3050"
+    hardware_tier: str = "Auto-Detected"
     vram_gb: int = 6
+    cpu_name: Optional[str] = None
+    os_name: Optional[str] = None
+    system_ram_gb: Optional[int] = None
     samples_count: int = 120
     wallet_address: Optional[str] = None
 
@@ -451,6 +478,9 @@ def register_worker(payload: WorkerRegisterRequest):
         vram_gb=payload.vram_gb,
         samples_count=payload.samples_count,
         wallet_address=payload.wallet_address,
+        cpu_name=payload.cpu_name,
+        os_name=payload.os_name,
+        system_ram_gb=payload.system_ram_gb,
     )
 
 

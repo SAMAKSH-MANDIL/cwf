@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Server, Cpu, CheckCircle2, ShieldCheck, Coins, Activity, HardDrive, Zap, ExternalLink, PlusCircle, X, Check, Trash2, Download, Terminal, Copy } from "lucide-react";
+import Link from "next/link";
+import { Server, Cpu, CheckCircle2, ShieldCheck, Coins, Activity, HardDrive, Zap, ExternalLink, PlusCircle, X, Check, Trash2, Download, Terminal, Copy, ArrowRight } from "lucide-react";
 
 export default function ProvidersPage() {
   const [providers, setProviders] = useState<any[]>([]);
@@ -209,22 +210,13 @@ export default function ProvidersPage() {
           </div>
 
           <div className="flex flex-wrap items-center gap-2.5 shrink-0">
-            <a
-              href="/fedzero_worker.py"
-              download="fedzero_worker.py"
+            <Link
+              href="/training"
               className="px-4 py-2.5 bg-[#059669] hover:bg-[#047857] text-white font-mono font-black text-xs uppercase tracking-wider border-2 border-[#1C1917] shadow-[3px_3px_0px_#1C1917] transition-all flex items-center space-x-2"
             >
-              <Download className="w-4 h-4" />
-              <span>Download Worker (.py)</span>
-            </a>
-            <a
-              href="/run_worker.bat"
-              download="run_worker.bat"
-              className="px-4 py-2.5 bg-[#1C1917] hover:bg-[#2D2A26] text-white font-mono font-black text-xs uppercase tracking-wider border-2 border-[#1C1917] shadow-[3px_3px_0px_#059669] transition-all flex items-center space-x-2"
-            >
-              <Download className="w-4 h-4" />
-              <span>1-Click Windows (.bat)</span>
-            </a>
+              <span>Download & Setup in Training Studio</span>
+              <ArrowRight className="w-4 h-4" />
+            </Link>
           </div>
         </div>
 

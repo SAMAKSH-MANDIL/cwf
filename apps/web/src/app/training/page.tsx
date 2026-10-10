@@ -157,9 +157,13 @@ interface EdgeNode {
   name: string;
   hardware_tier: string;
   vram_gb: number;
+  cpu_name?: string;
+  os_name?: string;
+  system_ram_gb?: number;
   samples_count: number;
   wallet_address: string;
   enabled: boolean;
+  is_simulated?: boolean;
 }
 
 export default function TrainingPage() {
@@ -325,44 +329,10 @@ export default function TrainingPage() {
     return Math.max(1, lines.length - 1);
   }, [datasetMode, activePreset.rowsCount, customCsvText]);
 
-  const [edgeNodes, setEdgeNodes] = useState<EdgeNode[]>([
-    {
-      id: "node-1",
-      name: "Hospital Alpha Enclave",
-      hardware_tier: "RTX 4090",
-      vram_gb: 24,
-      samples_count: 120,
-      wallet_address: "0x71C66336071ffd4e773E34dac3Ca0A6688211eef",
-      enabled: true,
-    },
-    {
-      id: "node-2",
-      name: "Clinic Beta Edge",
-      hardware_tier: "Apple M3 Max",
-      vram_gb: 36,
-      samples_count: 120,
-      wallet_address: "0x3A8F91B4C0257B881eAf06aDb5d10F9c976901A2",
-      enabled: true,
-    },
-    {
-      id: "node-3",
-      name: "Research Lab Gamma",
-      hardware_tier: "AWS A100 TensorCore",
-      vram_gb: 80,
-      samples_count: 120,
-      wallet_address: "0xE1294C668b828f7c9eF02559b36C67341De0923C",
-      enabled: true,
-    },
-    {
-      id: "node-4",
-      name: "Mobile Diagnostic Unit Delta",
-      hardware_tier: "Jetson Orin Nano",
-      vram_gb: 8,
-      samples_count: 120,
-      wallet_address: "0x98Fc44aB012C5E7290bC1864aDe7401c900D85Fb",
-      enabled: true,
-    },
-  ]);
+  const [edgeNodes, setEdgeNodes] = useState<EdgeNode[]>([]);
+  const [simCount, setSimCount] = useState<number>(3);
+  const [isSpawningSim, setIsSpawningSim] = useState<boolean>(false);
+  const [isClearingSim, setIsClearingSim] = useState<boolean>(false);
 
   // WebSocket Live Telemetry State
   const [wsStatus, setWsStatus] = useState<"connecting" | "connected" | "disconnected">("connecting");
@@ -398,11 +368,15 @@ export default function TrainingPage() {
               return {
                 id: d.wallet_address || `node-${idx + 1}`,
                 name: d.device_name || `Edge Node ${idx + 1}`,
-                hardware_tier: existing?.tier || d.hardware_tier || "RTX 4090",
-                vram_gb: existing?.vram || d.declared_vram_gb || 16,
+                hardware_tier: d.hardware_tier || existing?.tier || "Auto-Detected",
+                vram_gb: d.declared_vram_gb ?? d.vram_gb ?? existing?.vram ?? 6,
+                cpu_name: d.cpu_name,
+                os_name: d.os_name,
+                system_ram_gb: d.system_ram_gb,
                 samples_count: existing?.samples ?? (d.samples_count || 120),
                 wallet_address: d.wallet_address || `0x...`,
                 enabled: existing ? existing.enabled : true,
+                is_simulated: (d.device_name || "").includes("[Simulated]"),
               };
             });
           });
@@ -417,6 +391,72 @@ export default function TrainingPage() {
       clearInterval(interval);
     };
   }, []);
+
+  const handleSpawnSimulated = async () => {
+    setIsSpawningSim(true);
+    try {
+      const res = await fetch("/api/nodes/spawn-simulated", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ count: simCount }),
+      });
+      if (res.ok) {
+        const provRes = await fetch("/api/providers");
+        const data = await provRes.json();
+        if (Array.isArray(data)) {
+          setEdgeNodes(
+            data.map((d, idx) => ({
+              id: d.wallet_address || `node-${idx + 1}`,
+              name: d.device_name || `Edge Node ${idx + 1}`,
+              hardware_tier: d.hardware_tier || "RTX 4090",
+              vram_gb: d.declared_vram_gb ?? d.vram_gb ?? 16,
+              cpu_name: d.cpu_name,
+              os_name: d.os_name,
+              system_ram_gb: d.system_ram_gb,
+              samples_count: d.samples_count || 120,
+              wallet_address: d.wallet_address || `0x...`,
+              enabled: true,
+              is_simulated: (d.device_name || "").includes("[Simulated]"),
+            }))
+          );
+        }
+      }
+    } catch (e) {
+      console.error("Failed to spawn simulated nodes", e);
+    } finally {
+      setIsSpawningSim(false);
+    }
+  };
+
+  const handleClearSimulated = async () => {
+    setIsClearingSim(true);
+    try {
+      await fetch("/api/nodes/clear-simulated", { method: "POST" });
+      const provRes = await fetch("/api/providers");
+      const data = await provRes.json();
+      if (Array.isArray(data)) {
+        setEdgeNodes(
+          data.map((d, idx) => ({
+            id: d.wallet_address || `node-${idx + 1}`,
+            name: d.device_name || `Edge Node ${idx + 1}`,
+            hardware_tier: d.hardware_tier || "Auto-Detected",
+            vram_gb: d.declared_vram_gb ?? d.vram_gb ?? 6,
+            cpu_name: d.cpu_name,
+            os_name: d.os_name,
+            system_ram_gb: d.system_ram_gb,
+            samples_count: d.samples_count || 120,
+            wallet_address: d.wallet_address || `0x...`,
+            enabled: true,
+            is_simulated: (d.device_name || "").includes("[Simulated]"),
+          }))
+        );
+      }
+    } catch (e) {
+      console.error("Failed to clear simulated nodes", e);
+    } finally {
+      setIsClearingSim(false);
+    }
+  };
 
   const [showAddNodeModal, setShowAddNodeModal] = useState(false);
   const [newNodeName, setNewNodeName] = useState("");
@@ -1130,15 +1170,6 @@ export default function TrainingPage() {
         </div>
 
         <div className="z-10 flex flex-wrap items-center gap-3 text-xs font-mono">
-          <a
-            href="/api/worker/download"
-            download="fedzero_worker.py"
-            className="p-3 rounded-xl bg-[#1C1917] hover:bg-[#333] text-white border-2 border-[#1C1917] retro-shadow-sm flex items-center space-x-2 font-bold transition-all hover:scale-102"
-            title="Download native edge worker python script to connect any laptop/PC"
-          >
-            <Download className="w-4 h-4 text-emerald-400" />
-            <span>Download Worker (fedzero_worker.py)</span>
-          </a>
           <div className="p-3 rounded-xl bg-[#FAF7F2] border-2 border-[#1C1917] retro-shadow-sm flex items-center space-x-2.5">
             <span className={`w-2.5 h-2.5 rounded-full ${wsStatus === "connected" ? "bg-emerald-500 animate-pulse" : wsStatus === "connecting" ? "bg-amber-500 animate-ping" : "bg-red-500"}`}></span>
             <span className="font-bold text-[#1C1917]">
@@ -1626,9 +1657,9 @@ export default function TrainingPage() {
           </div>
         </div>
 
-        {/* Partition Strategy Header & Add Device Button */}
+        {/* Partition Strategy Header, Simulation Controls & Add Device Button */}
         <div className="flex flex-wrap items-center justify-between gap-3 text-xs font-mono">
-          <div className="flex items-center space-x-2">
+          <div className="flex flex-wrap items-center gap-2">
             <span className="font-bold text-[#1C1917] bg-[#FAF7F2] px-2.5 py-1 rounded-md border border-[#1C1917]/30">
               Strategy: {partitionMode === "equal" ? "⚖️ Equal Row Distribution" : "🛠️ Manual Row Input Mode"}
             </span>
@@ -1637,41 +1668,121 @@ export default function TrainingPage() {
             </span>
           </div>
 
-          <button
-            onClick={() => setShowAddNodeModal(true)}
-            className="px-3.5 py-1.5 rounded-lg border-2 border-[#1C1917] bg-[#FAF7F2] text-xs font-mono font-bold text-[#1C1917] hover:bg-[#F2ECE1] retro-shadow-sm flex items-center space-x-1.5"
-          >
-            <Plus className="w-3.5 h-3.5 text-[#E05338]" />
-            <span>+ Add Device Node</span>
-          </button>
+          <div className="flex flex-wrap items-center gap-2">
+            {/* On-demand Simulation Controls for root node */}
+            <div className="flex items-center space-x-1.5 bg-[#FAF7F2] border border-[#1C1917]/30 px-2 py-1 rounded-lg">
+              <span className="text-[11px] font-bold text-[#1C1917]">Simulate:</span>
+              <select
+                value={simCount}
+                onChange={(e) => setSimCount(Number(e.target.value))}
+                className="bg-white border border-[#1C1917]/30 rounded px-1.5 py-0.5 text-[11px] font-bold text-[#1C1917]"
+              >
+                <option value={1}>1 Node</option>
+                <option value={2}>2 Nodes</option>
+                <option value={3}>3 Nodes</option>
+                <option value={4}>4 Nodes</option>
+                <option value={5}>5 Nodes</option>
+                <option value={6}>6 Nodes</option>
+              </select>
+              <button
+                type="button"
+                onClick={handleSpawnSimulated}
+                disabled={isSpawningSim}
+                className="px-2.5 py-1 bg-[#E05338] text-white hover:bg-[#c9422a] rounded text-[11px] font-bold flex items-center space-x-1 disabled:opacity-50"
+                title="Spawn simulated nodes on root node for testing"
+              >
+                <Zap className="w-3 h-3" />
+                <span>{isSpawningSim ? "Adding..." : `+ Spawn ${simCount}`}</span>
+              </button>
+            </div>
+
+            {edgeNodes.some((n) => n.is_simulated || n.name.toLowerCase().includes("[simulated]")) && (
+              <button
+                type="button"
+                onClick={handleClearSimulated}
+                disabled={isClearingSim}
+                className="px-2.5 py-1.5 rounded-lg border border-red-300 bg-red-50 text-red-700 hover:bg-red-100 text-[11px] font-bold flex items-center space-x-1 disabled:opacity-50"
+                title="Remove all simulated test nodes"
+              >
+                <Trash2 className="w-3 h-3" />
+                <span>{isClearingSim ? "Clearing..." : "Clear Simulated"}</span>
+              </button>
+            )}
+
+            <button
+              onClick={() => setShowAddNodeModal(true)}
+              className="px-3 py-1.5 rounded-lg border-2 border-[#1C1917] bg-[#FAF7F2] text-xs font-mono font-bold text-[#1C1917] hover:bg-[#F2ECE1] retro-shadow-sm flex items-center space-x-1.5"
+            >
+              <Plus className="w-3.5 h-3.5 text-[#E05338]" />
+              <span>+ Custom Node</span>
+            </button>
+          </div>
         </div>
 
-        {/* Nodes Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-          {edgeNodes.map((node) => (
-            <div
-              key={node.id}
-              className={`p-5 rounded-xl border-2 transition-all flex flex-col justify-between space-y-4 ${
-                node.enabled
-                  ? "bg-[#FAF7F2] border-[#1C1917] retro-shadow"
-                  : "bg-[#F4EFE6] border-[#1C1917]/30 opacity-60"
-              }`}
-            >
-              <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <label className="flex items-center space-x-2 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={node.enabled}
-                      onChange={() => toggleNodeEnabled(node.id)}
-                      className="w-4 h-4 accent-[#E05338] rounded cursor-pointer"
-                    />
-                    <span className="text-xs font-mono font-bold text-[#1C1917]">
-                      {node.enabled ? "Active Node" : "Disabled"}
-                    </span>
-                  </label>
+        {/* Empty State vs Nodes Grid */}
+        {edgeNodes.length === 0 ? (
+          <div className="p-8 rounded-xl bg-white border-2 border-dashed border-[#1C1917]/30 text-center space-y-4 font-mono">
+            <div className="w-12 h-12 rounded-2xl bg-amber-100 text-amber-700 flex items-center justify-center mx-auto border-2 border-[#1C1917]">
+              <Laptop className="w-6 h-6" />
+            </div>
+            <div>
+              <h4 className="font-bold text-base text-[#1C1917]">No Edge Devices Connected</h4>
+              <p className="text-xs text-[#78716C] max-w-lg mx-auto mt-1 leading-relaxed">
+                By default, no mock nodes are present. Connect an actual physical laptop using the official worker script above, or spawn simulated test nodes on-demand to test locally.
+              </p>
+            </div>
+            <div className="flex flex-wrap items-center justify-center gap-3 pt-2">
+              <div className="flex items-center space-x-2 bg-[#FAF7F2] border-2 border-[#1C1917] px-3 py-1.5 rounded-lg retro-shadow-sm">
+                <span className="text-xs font-bold text-[#1C1917]">Simulate Test Nodes:</span>
+                <select
+                  value={simCount}
+                  onChange={(e) => setSimCount(Number(e.target.value))}
+                  className="bg-white border border-[#1C1917] rounded px-2 py-1 text-xs font-bold text-[#1C1917]"
+                >
+                  <option value={1}>1 Node</option>
+                  <option value={2}>2 Nodes</option>
+                  <option value={3}>3 Nodes (Standard)</option>
+                  <option value={4}>4 Nodes</option>
+                  <option value={5}>5 Nodes</option>
+                  <option value={6}>6 Nodes</option>
+                </select>
+                <button
+                  type="button"
+                  onClick={handleSpawnSimulated}
+                  disabled={isSpawningSim}
+                  className="px-3.5 py-1.5 bg-[#E05338] text-white hover:bg-[#c9422a] rounded font-bold text-xs flex items-center space-x-1.5 disabled:opacity-50"
+                >
+                  <Zap className="w-3.5 h-3.5" />
+                  <span>{isSpawningSim ? "Spawning..." : `Spawn ${simCount} Nodes Now`}</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            {edgeNodes.map((node) => (
+              <div
+                key={node.id}
+                className={`p-5 rounded-xl border-2 transition-all flex flex-col justify-between space-y-4 ${
+                  node.enabled
+                    ? "bg-[#FAF7F2] border-[#1C1917] retro-shadow"
+                    : "bg-[#F4EFE6] border-[#1C1917]/30 opacity-60"
+                }`}
+              >
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <label className="flex items-center space-x-2 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={node.enabled}
+                        onChange={() => toggleNodeEnabled(node.id)}
+                        className="w-4 h-4 accent-[#E05338] rounded cursor-pointer"
+                      />
+                      <span className="text-xs font-mono font-bold text-[#1C1917]">
+                        {node.enabled ? "Active Node" : "Disabled"}
+                      </span>
+                    </label>
 
-                  {edgeNodes.length > 1 && (
                     <button
                       type="button"
                       onClick={() => removeNode(node.id)}
@@ -1680,106 +1791,114 @@ export default function TrainingPage() {
                     >
                       <Trash2 className="w-3.5 h-3.5" />
                     </button>
+                  </div>
+
+                  <div className="flex items-center space-x-2 pt-1">
+                    <div className="w-8 h-8 rounded-lg bg-[#E05338]/10 border border-[#E05338]/40 flex items-center justify-center text-[#E05338] shrink-0">
+                      <Laptop className="w-4 h-4" />
+                    </div>
+                    <div className="min-w-0">
+                      <h4 className="font-display font-bold text-sm text-[#1C1917] truncate" title={node.name}>
+                        {node.name}
+                      </h4>
+                      <span className="text-[10px] font-mono text-[#78716C] block truncate">
+                        {node.wallet_address.substring(0, 12)}...
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Real Hardware Spec Badge & System Info */}
+                <div className="space-y-2 pt-2 border-t border-[#1C1917]/15 text-xs font-mono">
+                  <div className="flex flex-col space-y-1 bg-[#F4EFE6] p-2.5 rounded-lg border border-[#1C1917]/20">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[10px] uppercase font-bold text-[#78716C]">Hardware:</span>
+                      <span className={`text-[9px] font-black px-1.5 py-0.5 rounded ${node.is_simulated || node.name.includes('[Simulated]') ? 'bg-amber-100 text-amber-800 border border-amber-300' : 'bg-emerald-100 text-emerald-800 border border-emerald-300'}`}>
+                        {node.is_simulated || node.name.includes('[Simulated]') ? "⚡ SIMULATED" : "🟢 REAL DEVICE"}
+                      </span>
+                    </div>
+                    <div className="text-xs font-bold text-[#1C1917] truncate" title={node.hardware_tier}>
+                      {node.hardware_tier} {node.vram_gb ? `(${node.vram_gb} GB VRAM)` : ''}
+                    </div>
+                    {node.cpu_name && (
+                      <div className="text-[10px] text-[#57534E] truncate" title={node.cpu_name}>
+                        <span className="font-semibold text-[#78716C]">CPU:</span> {node.cpu_name}
+                      </div>
+                    )}
+                    {(node.system_ram_gb || node.os_name) && (
+                      <div className="text-[10px] text-[#57534E] flex items-center justify-between pt-0.5">
+                        {node.system_ram_gb ? <span><span className="font-semibold text-[#78716C]">RAM:</span> {node.system_ram_gb} GB</span> : <span />}
+                        {node.os_name ? <span className="bg-white/80 px-1 py-0.5 rounded border border-[#1C1917]/10 font-bold">{node.os_name}</span> : null}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* ROW ALLOCATION CONTROLS: EQUAL VS MANUAL INPUT */}
+                  {partitionMode === "equal" ? (
+                    <div className="p-3 bg-[#F4EFE6] rounded-lg border border-[#1C1917]/25 space-y-1">
+                      <div className="flex items-center justify-between text-[11px]">
+                        <span className="text-[#78716C]">Assigned Rows:</span>
+                        <span className="font-black text-sm text-[#1C1917] bg-white px-2 py-0.5 rounded border border-[#1C1917]">
+                          {node.samples_count} rows
+                        </span>
+                      </div>
+                      <div className="text-[10px] text-[#78716C]">
+                        Auto-split across {activeNodes.length} active edge devices
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="p-3 bg-[#FAF0E4] rounded-lg border-2 border-[#1C1917] shadow-[2px_2px_0px_#1C1917] space-y-2">
+                      <div className="flex items-center justify-between text-[10px] font-mono">
+                        <span className="font-bold text-[#1C1917] uppercase">ENTER NUMBER OF ROWS:</span>
+                        <span className="text-[#E05338] font-bold">
+                          {((node.samples_count / Math.max(1, totalDatasetRecords)) * 100).toFixed(0)}% of total
+                        </span>
+                      </div>
+
+                      <div className="flex items-center space-x-1.5">
+                        <button
+                          type="button"
+                          onClick={() => updateNodeManualSamples(node.id, Math.max(0, node.samples_count - 25))}
+                          className="w-8 h-8 bg-white border border-[#1C1917] rounded font-bold text-xs hover:bg-[#FAF7F2] transition-colors shrink-0"
+                          title="Subtract 25 rows"
+                        >
+                          -25
+                        </button>
+                        <input
+                          type="number"
+                          min="0"
+                          max={totalDatasetRecords}
+                          value={node.samples_count}
+                          onChange={(e) => updateNodeManualSamples(node.id, parseInt(e.target.value) || 0)}
+                          className="w-full py-1 px-2 text-center text-sm font-black font-mono bg-white border-2 border-[#1C1917] rounded shadow-inner focus:outline-none focus:ring-2 focus:ring-[#E05338]"
+                          placeholder="0"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => updateNodeManualSamples(node.id, node.samples_count + 25)}
+                          className="w-8 h-8 bg-white border border-[#1C1917] rounded font-bold text-xs hover:bg-[#FAF7F2] transition-colors shrink-0"
+                          title="Add 25 rows"
+                        >
+                          +25
+                        </button>
+                      </div>
+
+                      <div className="flex items-center justify-between text-[10px] text-[#78716C] pt-0.5">
+                        <span>Direct numeric input</span>
+                        <span className="font-bold text-[#1C1917]">{node.samples_count} rows assigned</span>
+                      </div>
+                    </div>
                   )}
-                </div>
 
-                <div className="flex items-center space-x-2 pt-1">
-                  <div className="w-8 h-8 rounded-lg bg-[#E05338]/10 border border-[#E05338]/40 flex items-center justify-center text-[#E05338]">
-                    <Laptop className="w-4 h-4" />
-                  </div>
-                  <div>
-                    <h4 className="font-display font-bold text-sm text-[#1C1917] truncate max-w-[170px]">
-                      {node.name}
-                    </h4>
-                    <span className="text-[10px] font-mono text-[#78716C] block">
-                      {node.wallet_address.substring(0, 10)}...
-                    </span>
+                  <div className="flex items-center justify-between text-[11px] text-[#78716C]">
+                    <span>Privacy Enclave:</span>
+                    <span className="text-emerald-700 font-bold">100% Local (0 B leaked)</span>
                   </div>
                 </div>
               </div>
-
-              {/* Hardware Spec */}
-              <div className="space-y-3 pt-3 border-t border-[#1C1917]/15 text-xs font-mono">
-                <div className="flex items-center justify-between">
-                  <span className="text-[#78716C] text-[11px]">Hardware:</span>
-                  <select
-                    value={node.hardware_tier}
-                    onChange={(e) => updateNodeTier(node.id, e.target.value)}
-                    className="px-2 py-1 rounded bg-[#F4EFE6] border border-[#1C1917]/30 text-[11px] font-bold text-[#1C1917]"
-                  >
-                    <option value="RTX 4090">RTX 4090 (24GB)</option>
-                    <option value="Apple M3 Max">Apple M3 Max (36GB)</option>
-                    <option value="AWS A100 TensorCore">A100 TensorCore (80GB)</option>
-                    <option value="Jetson Orin Nano">Jetson Orin (8GB)</option>
-                    <option value="Intel Xeon Enclave">Xeon SGX Enclave</option>
-                  </select>
-                </div>
-
-                {/* ROW ALLOCATION CONTROLS: EQUAL VS MANUAL INPUT */}
-                {partitionMode === "equal" ? (
-                  <div className="p-3 bg-[#F4EFE6] rounded-lg border border-[#1C1917]/25 space-y-1">
-                    <div className="flex items-center justify-between text-[11px]">
-                      <span className="text-[#78716C]">Assigned Rows:</span>
-                      <span className="font-black text-sm text-[#1C1917] bg-white px-2 py-0.5 rounded border border-[#1C1917]">
-                        {node.samples_count} rows
-                      </span>
-                    </div>
-                    <div className="text-[10px] text-[#78716C]">
-                      Auto-split across {activeNodes.length} active edge devices
-                    </div>
-                  </div>
-                ) : (
-                  <div className="p-3 bg-[#FAF0E4] rounded-lg border-2 border-[#1C1917] shadow-[2px_2px_0px_#1C1917] space-y-2">
-                    <div className="flex items-center justify-between text-[10px] font-mono">
-                      <span className="font-bold text-[#1C1917] uppercase">ENTER NUMBER OF ROWS:</span>
-                      <span className="text-[#E05338] font-bold">
-                        {((node.samples_count / Math.max(1, totalDatasetRecords)) * 100).toFixed(0)}% of total
-                      </span>
-                    </div>
-
-                    <div className="flex items-center space-x-1.5">
-                      <button
-                        type="button"
-                        onClick={() => updateNodeManualSamples(node.id, Math.max(0, node.samples_count - 25))}
-                        className="w-8 h-8 bg-white border border-[#1C1917] rounded font-bold text-xs hover:bg-[#FAF7F2] transition-colors shrink-0"
-                        title="Subtract 25 rows"
-                      >
-                        -25
-                      </button>
-                      <input
-                        type="number"
-                        min="0"
-                        max={totalDatasetRecords}
-                        value={node.samples_count}
-                        onChange={(e) => updateNodeManualSamples(node.id, parseInt(e.target.value) || 0)}
-                        className="w-full py-1 px-2 text-center text-sm font-black font-mono bg-white border-2 border-[#1C1917] rounded shadow-inner focus:outline-none focus:ring-2 focus:ring-[#E05338]"
-                        placeholder="0"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => updateNodeManualSamples(node.id, node.samples_count + 25)}
-                        className="w-8 h-8 bg-white border border-[#1C1917] rounded font-bold text-xs hover:bg-[#FAF7F2] transition-colors shrink-0"
-                        title="Add 25 rows"
-                      >
-                        +25
-                      </button>
-                    </div>
-
-                    <div className="flex items-center justify-between text-[10px] text-[#78716C] pt-0.5">
-                      <span>Direct numeric input</span>
-                      <span className="font-bold text-[#1C1917]">{node.samples_count} rows assigned</span>
-                    </div>
-                  </div>
-                )}
-
-                <div className="flex items-center justify-between text-[11px] text-[#78716C]">
-                  <span>Privacy Enclave:</span>
-                  <span className="text-emerald-700 font-bold">100% Local (0 B leaked)</span>
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
+        )}
       </section>
 
       {/* ========================================================================= */}

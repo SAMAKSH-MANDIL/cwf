@@ -111,8 +111,11 @@ class ComputeProviderRecord(Base):
 
     wallet_address = Column(String(42), primary_key=True)
     device_name = Column(String(128), nullable=False)
-    hardware_tier = Column(String(32), default="T4")
+    hardware_tier = Column(String(128), default="T4")
     vram_gb = Column(Integer, default=16)
+    cpu_name = Column(String(128), nullable=True)
+    os_name = Column(String(64), nullable=True)
+    system_ram_gb = Column(Integer, nullable=True)
     reputation_score = Column(Integer, default=10)
     total_contributions = Column(Integer, default=0)
     total_rewards_earned = Column(Float, default=0.0)

@@ -47,16 +47,10 @@ class SolanaRewardService:
         self.total_rewards_paid = 0.0
         self.transaction_history: List[Dict[str, Any]] = []
 
-        self._initialize_default_providers()
+        # Starts empty by default (providers registered when real devices connect or explicitly simulated)
 
-    def _initialize_default_providers(self):
-        """Pre-registers the benchmark simulated hospital/edge nodes."""
-        nodes = [
-            ("0x71C66336071ffd4e773E34dac3Ca0A6688211eef", "Hospital Alpha Enclave", "RTX 4090", 24),
-            ("0x3A8F91B4C0257B881eAf06aDb5d10F9c976901A2", "Clinic Beta Edge Node", "Apple M3 Max", 36),
-            ("0xE1294C668b828f7c9eF02559b36C67341De0923C", "Research Lab Gamma", "AWS A100 TensorCore", 80),
-            ("0x98Fc44aB012C5E7290bC1864aDe7401c900D85Fb", "Mobile Diagnostic Unit Delta", "Jetson Orin Nano", 8),
-        ]
+    def spawn_simulated_providers(self, nodes: List[Tuple[str, str, str, int]]):
+        """Pre-registers simulated edge providers on demand."""
         for wallet, name, tier, vram in nodes:
             self.register_provider(
                 wallet_address=wallet,
@@ -65,12 +59,22 @@ class SolanaRewardService:
                 declared_vram_gb=vram,
             )
 
+    def clear_simulated_providers(self):
+        """Removes simulated providers from registry."""
+        to_del = [w for w, p in list(self.providers.items()) if "sim_" in p.get("device_name", "").lower() or "hospital" in p.get("device_name", "").lower() or "clinic" in p.get("device_name", "").lower() or "research" in p.get("device_name", "").lower() or "diagnostic" in p.get("device_name", "").lower()]
+        for w in to_del:
+            if w in self.providers:
+                del self.providers[w]
+
     def register_provider(
         self,
         wallet_address: str,
         device_name: str,
         hardware_tier: str = "T4",
         declared_vram_gb: int = 16,
+        cpu_name: Optional[str] = None,
+        os_name: Optional[str] = None,
+        system_ram_gb: Optional[int] = None,
     ) -> Dict[str, Any]:
         """Registers a device in the Solana Compute Provider PDA."""
         norm_addr = wallet_address.lower()
@@ -82,6 +86,9 @@ class SolanaRewardService:
             "device_name": device_name,
             "hardware_tier": hardware_tier,
             "declared_vram_gb": declared_vram_gb,
+            "cpu_name": cpu_name,
+            "os_name": os_name,
+            "system_ram_gb": system_ram_gb,
             "reputation_score": 10,
             "total_contributions": 0,
             "total_rewards_earned": 0.0,

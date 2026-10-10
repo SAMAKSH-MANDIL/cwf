@@ -114,7 +114,9 @@ class NetworkOrchestrator:
             import numpy as np
 
             existing_wallets = {c.wallet_address.lower() for c in self.fl_coordinator.clients.values()}
-            for prov in db.query(ComputeProviderRecord).all():
+            for prov in db.query(ComputeProviderRecord).filter(ComputeProviderRecord.active == True).all():
+                if "[simulated]" in (prov.device_name or "").lower():
+                    continue
                 if prov.wallet_address.lower() not in existing_wallets:
                     node_id = f"node_{prov.wallet_address[-6:].lower()}"
                     seed = int(hashlib.md5(prov.wallet_address.encode()).hexdigest()[:6], 16) % 100000
@@ -150,6 +152,9 @@ class NetworkOrchestrator:
         vram_gb: int = 16,
         samples_count: int = 220,
         wallet_address: Optional[str] = None,
+        cpu_name: Optional[str] = None,
+        os_name: Optional[str] = None,
+        system_ram_gb: Optional[int] = None,
     ) -> Dict[str, Any]:
         """
         Dynamically provisions a new edge device (laptop/hospital/phone/GPU) in the network.
@@ -189,6 +194,9 @@ class NetworkOrchestrator:
             device_name=name,
             hardware_tier=hardware_tier,
             declared_vram_gb=vram_gb,
+            cpu_name=cpu_name,
+            os_name=os_name,
+            system_ram_gb=system_ram_gb,
         )
 
         # Persist in DB
@@ -199,6 +207,9 @@ class NetworkOrchestrator:
                 device_name=name,
                 hardware_tier=hardware_tier,
                 vram_gb=vram_gb,
+                cpu_name=cpu_name,
+                os_name=os_name,
+                system_ram_gb=system_ram_gb,
                 reputation_score=10,
             )
             db.merge(prov_rec)
@@ -213,6 +224,9 @@ class NetworkOrchestrator:
             "wallet_address": wallet_address,
             "hardware_tier": hardware_tier,
             "vram_gb": vram_gb,
+            "cpu_name": cpu_name,
+            "os_name": os_name,
+            "system_ram_gb": system_ram_gb,
             "samples_count": samples_count,
             "active_clients_count": len(self.fl_coordinator.clients),
         }
@@ -259,13 +273,77 @@ class NetworkOrchestrator:
 
         return True
 
+    def spawn_simulated_nodes(self, count: int = 3) -> List[Dict[str, Any]]:
+        """Spawns simulated edge nodes on demand for testing federated learning without external devices."""
+        sim_presets = [
+            ("Hospital Alpha Enclave", "RTX 4090", 24, 120, "0x71C66336071ffd4e773E34dac3Ca0A6688211eef"),
+            ("Clinic Beta Edge", "Apple M3 Max", 36, 120, "0x3A8F91B4C0257B881eAf06aDb5d10F9c976901A2"),
+            ("Research Lab Gamma", "AWS A100 TensorCore", 80, 120, "0xE1294C668b828f7c9eF02559b36C67341De0923C"),
+            ("Mobile Diagnostic Delta", "Jetson Orin Nano", 8, 120, "0x98Fc44aB012C5E7290bC1864aDe7401c900D85Fb"),
+            ("Genomics Center Epsilon", "Intel Xeon Enclave", 64, 120, "0x55F11456A88930B075E4a13bB4C8330B58D0a12F"),
+            ("Regional Health Zeta", "RTX 3080", 10, 120, "0x89D24A66B987C3E1410A882E47d519b7a4cD7110"),
+        ]
+        created = []
+        for i in range(min(max(1, count), len(sim_presets))):
+            name, tier, vram, samples, wallet = sim_presets[i]
+            res = self.register_new_device(
+                name=f"[Simulated] {name}",
+                hardware_tier=tier,
+                vram_gb=vram,
+                samples_count=samples,
+                wallet_address=wallet,
+            )
+            created.append(res)
+
+        ws_manager.broadcast_sync("NODES_UPDATED", {
+            "active_clients": len(self.fl_coordinator.clients),
+            "providers": self.solana.get_all_providers(),
+        })
+        return created
+
+    def clear_simulated_nodes(self) -> Dict[str, Any]:
+        """Removes all simulated nodes from coordinator, Solana, and database."""
+        sim_client_ids = [
+            cid for cid, client in list(self.fl_coordinator.clients.items())
+            if "[simulated]" in client.name.lower() or "hospital" in client.name.lower() or "clinic" in client.name.lower() or "research" in client.name.lower() or "diagnostic" in client.name.lower() or "genomics" in client.name.lower() or "regional" in client.name.lower()
+        ]
+        for cid in sim_client_ids:
+            if cid in self.fl_coordinator.clients:
+                del self.fl_coordinator.clients[cid]
+
+        self.solana.clear_simulated_providers()
+
+        db = SessionLocal()
+        try:
+            db.query(ComputeProviderRecord).filter(
+                (ComputeProviderRecord.device_name.like("%[Simulated]%")) |
+                (ComputeProviderRecord.device_name.like("%Hospital%")) |
+                (ComputeProviderRecord.device_name.like("%Clinic%")) |
+                (ComputeProviderRecord.device_name.like("%Research Lab%")) |
+                (ComputeProviderRecord.device_name.like("%Diagnostic%")) |
+                (ComputeProviderRecord.device_name.like("%Genomics%")) |
+                (ComputeProviderRecord.device_name.like("%Regional%"))
+            ).delete(synchronize_session=False)
+            db.commit()
+        finally:
+            db.close()
+
+        ws_manager.broadcast_sync("NODES_UPDATED", {
+            "active_clients": len(self.fl_coordinator.clients),
+            "providers": self.solana.get_all_providers(),
+        })
+        return {"cleared": len(sim_client_ids)}
+
     def register_worker_daemon(
         self,
         node_name: str,
-        hardware_tier: str = "GTX 1650/RTX 3050",
+        hardware_tier: str = "Auto-Detected",
         vram_gb: int = 6,
         samples_count: int = 120,
         wallet_address: Optional[str] = None,
+        cpu_name: Optional[str] = None,
+        os_name: Optional[str] = None,
+        system_ram_gb: Optional[int] = None,
     ) -> Dict[str, Any]:
         """Registers a native external worker daemon process (Windows/Linux/Mac)."""
         reg_result = self.register_new_device(
@@ -274,6 +352,9 @@ class NetworkOrchestrator:
             vram_gb=vram_gb,
             samples_count=samples_count,
             wallet_address=wallet_address,
+            cpu_name=cpu_name,
+            os_name=os_name,
+            system_ram_gb=system_ram_gb,
         )
         wallet = reg_result.get("wallet_address") or wallet_address or "0x..."
         worker_info = {
@@ -281,6 +362,9 @@ class NetworkOrchestrator:
             "wallet_address": wallet,
             "hardware_tier": hardware_tier,
             "vram_gb": vram_gb,
+            "cpu_name": cpu_name,
+            "os_name": os_name,
+            "system_ram_gb": system_ram_gb,
             "samples_count": samples_count,
             "last_seen": time.time(),
             "status": "ONLINE",
@@ -294,13 +378,25 @@ class NetworkOrchestrator:
             "wallet_address": wallet,
             "hardware_tier": hardware_tier,
             "vram_gb": vram_gb,
+            "cpu_name": cpu_name,
+            "os_name": os_name,
+            "system_ram_gb": system_ram_gb,
             "samples_count": samples_count,
             "status": "ONLINE",
         })
+
+        hw_desc = f"{hardware_tier} ({vram_gb} GB VRAM)"
+        if cpu_name:
+            hw_desc += f", CPU: {cpu_name}"
+        if system_ram_gb:
+            hw_desc += f", RAM: {system_ram_gb} GB"
+        if os_name:
+            hw_desc += f", OS: {os_name}"
+
         ws_manager.broadcast_sync("LOG_EMITTED", {
             "tag": "Coordinator",
-            "message": f"[MESH_NODE_JOIN] External device '{node_name}' ({hardware_tier}, {vram_gb} GB VRAM) connected to federated mesh.",
-            "line": f"[{t_str}] [Coordinator] [MESH_NODE_JOIN] External device '{node_name}' ({hardware_tier}, {vram_gb} GB VRAM) connected to federated mesh.",
+            "message": f"[MESH_NODE_JOIN] External device '{node_name}' ({hw_desc}) connected to federated mesh.",
+            "line": f"[{t_str}] [Coordinator] [MESH_NODE_JOIN] External device '{node_name}' ({hw_desc}) connected to federated mesh.",
             "round_number": self.fl_coordinator.current_round,
         })
 
@@ -534,6 +630,8 @@ class NetworkOrchestrator:
                 ):
                     participating_clients[cid] = c
         if not participating_clients:
+            if not self.fl_coordinator.clients:
+                self.spawn_simulated_nodes(count=3)
             participating_clients = self.fl_coordinator.clients
 
         # Publish job to external native worker daemons queue

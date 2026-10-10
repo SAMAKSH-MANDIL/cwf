@@ -44,26 +44,52 @@ class FederatedCoordinator:
         self.clients: Dict[str, FederatedClient] = {}
         self.round_history: List[Dict[str, Any]] = []
 
-        self._initialize_default_clients()
+        # By default, start with ZERO pre-configured clients (awaits real devices or explicit simulation)
 
-    def _initialize_default_clients(self):
-        """Initializes simulated hospital participants with private partitions."""
-        partitions = get_federated_partitions()
-        tiers = {
-            "node_alpha": "RTX 4090",
-            "node_beta": "Apple M3 Max",
-            "node_gamma": "AWS A100 TensorCore",
-            "node_delta": "Jetson Orin Nano",
-        }
-        for node_id, p_info in partitions.items():
+    def spawn_simulated_clients(self, count: int = 3) -> List[Dict[str, Any]]:
+        """Initializes simulated hospital participants on demand for local benchmark testing."""
+        from ml.datasets.synthetic_data import generate_synthetic_biomarkers
+        import secrets
+
+        tiers = [
+            ("RTX 4090", 24),
+            ("Apple M3 Max", 36),
+            ("AWS A100 TensorCore", 80),
+            ("Jetson Orin Nano", 8),
+            ("Tesla V100 GPU", 16),
+        ]
+        created = []
+        curr_sim_count = len([c for c in self.clients.values() if "sim_" in c.client_id or "node_" in c.client_id])
+        for i in range(count):
+            idx = curr_sim_count + i + 1
+            node_id = f"sim_node_{idx}"
+            tier, vram = tiers[i % len(tiers)]
+            name = f"Simulated Node {idx} ({tier.split()[0]})"
+            wallet = f"0x{secrets.token_hex(20)}"
+            data = generate_synthetic_biomarkers(n_samples=120, seed=1000 + idx)
             client = FederatedClient(
                 client_id=node_id,
-                name=p_info["name"],
-                wallet_address=p_info["device_id"],
-                private_data=p_info["data"],
-                compute_tier=tiers.get(node_id, "T4"),
+                name=name,
+                wallet_address=wallet,
+                private_data=data,
+                compute_tier=tier,
             )
             self.clients[node_id] = client
+            created.append({
+                "client_id": node_id,
+                "name": name,
+                "wallet_address": wallet,
+                "hardware_tier": tier,
+                "vram_gb": vram,
+                "samples_count": 120,
+            })
+        return created
+
+    def clear_simulated_clients(self):
+        """Removes all simulated nodes, retaining only real connected worker daemons."""
+        to_del = [cid for cid in list(self.clients.keys()) if cid.startswith("sim_") or cid.startswith("node_")]
+        for cid in to_del:
+            del self.clients[cid]
 
     def get_current_model_metadata(self) -> Dict[str, Any]:
         """Returns metadata and cryptographic hash of current global model."""
