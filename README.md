@@ -200,22 +200,51 @@ python ml/clients/external_worker.py --host http://localhost:8000 --name "RTX_No
 
 ## 💎 Mathematical Formulas & Incentive Scoring
 
-### 1. Solana Dynamic Reward Formula:
+### 1. Solana Dynamic Reward Formula
 Governed by the Solana Anchor program ([`lib.rs`](file:///c:/cwf/blockchain/solana/programs/decentralized_ai/src/lib.rs)):
 
-$$\text{Reward} = \text{BaseRate} \times \left(\frac{\text{Quality}}{10000}\right) \times \left(\frac{\text{ProofValidity}}{10000}\right) \times \left(\frac{\text{ComputeWeight}}{10000}\right) \times \left(\frac{\text{ModelUtility}}{10000}\right)$$
+$$\text{Reward} = \text{BaseRate} \times \frac{\text{Quality}}{10000} \times \frac{\text{ProofValidity}}{10000} \times \frac{\text{ComputeWeight}}{10000} \times \frac{\text{ModelUtility}}{10000}$$
 
-Where:
-- $\text{Quality}$: Loss reduction score evaluated on validation data ($\Delta \mathcal{L} \times 10^4$).
-- $\text{ProofValidity}$: Evaluates to $1.0$ if the zkML proof is verified by `ZKVerifier.sol`, $0$ if invalid.
-- $\text{ComputeWeight}$: Hardware multiplier (CPU: $1.0\times$, RTX 3080: $1.4\times$, RTX 4090: $1.8\times$, H100: $2.5\times$).
-- $\text{ModelUtility}$: Dynamic community demand factor.
+```text
+┌────────────────────────────────────────────────────────────────────────────────────────────────────────┐
+│  Reward = BaseRate × (Quality / 10,000) × (ProofValidity / 10,000) × (ComputeWeight / 10,000) × Utility │
+└────────────────────────────────────────────────────────────────────────────────────────────────────────┘
+```
 
-### 2. Byzantine Robust FedAvg Aggregation:
-$$\Delta W_{\text{global}} = \sum_{i \in \mathcal{S}_{\text{accepted}}} \frac{n_i}{\sum_{j} n_j} \cdot \text{clip}\left(\Delta W_i, \tau\right)$$
+**Where:**
+- **$\text{Quality}$**: Loss reduction score evaluated on validation holdout set ($\Delta \mathcal{L} \times 10^4$ basis points).
+- **$\text{ProofValidity}$**: $10,000$ ($1.0\times$) only if zkML proof verifies on Arbitrum `ZKVerifier.sol`; $0$ if invalid or poisoned.
+- **$\text{ComputeWeight}$**: Hardware tier capacity score (CPU: $10,000$, RTX 3080: $14,000$, RTX 4090: $18,000$, NVIDIA H100: $25,000$).
+- **$\text{ModelUtility}$**: Dynamic community and domain demand factor for target model architecture.
 
-Where:
-$$\mathcal{S}_{\text{accepted}} = \left\{ i : \|\Delta W_i - \text{median}(\Delta W)\|_2 \le \kappa \cdot \text{IQR} \right\}$$
+---
+
+### 2. Byzantine-Resilient FedAvg Aggregation
+Defends the global network against malicious weight-poisoning and gradient inversion before FedAvg aggregation:
+
+$$\Delta W_{\text{global}} = \sum_{i \in \mathcal{S}_{\text{accepted}}} \frac{n_i}{\sum_{j} n_j} \cdot \text{clip}(\Delta W_i, \tau)$$
+
+**Consensus Filter Set ($\mathcal{S}_{\text{accepted}}$):**
+$$\mathcal{S}_{\text{accepted}} = \{ i : \|\Delta W_i - \text{median}(\Delta W)\|_2 \le \kappa \cdot \text{IQR} \}$$
+
+```text
+┌────────────────────────────────────────────────────────────────────────────────────────────────────────┐
+│  Consensus: Accepts updates within median distance bound; clips L2 norms above threshold (τ = 4.0)     │
+└────────────────────────────────────────────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+### 3. Computational Non-Repudiation (zkML Proving Circuit)
+Validates that model updates were derived strictly according to verified SGD backpropagation without raw data leakage:
+
+$$\text{Verify}(\text{vk}, \pi_i, \vec{x}_{\text{pub}}) = 1 \iff \Delta W_i = \text{SGD}(W_0, \mathcal{D}_i, \eta)$$
+
+```text
+┌────────────────────────────────────────────────────────────────────────────────────────────────────────┐
+│  Halo2 / KZG Arithmetic Circuit: 14,208 constraints verified on Arbitrum L2 (ZKVerifier.sol)          │
+└────────────────────────────────────────────────────────────────────────────────────────────────────────┘
+```
 
 ---
 

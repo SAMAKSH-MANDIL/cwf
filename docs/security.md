@@ -19,7 +19,7 @@
 To protect the global model against adversarial updates, the aggregation engine implements two defenses:
 
 1. **Norm Clipping**:
-   $$\Delta W_i' = \Delta W_i \cdot \min\left(1, \frac{C}{\|\Delta W_i\|_2}\right)$$
+   $$\Delta W_i' = \Delta W_i \cdot \min(1, \frac{C}{\|\Delta W_i\|_2})$$
    Ensures no single participant can disproportionately bias the global model.
 
 2. **Distance-Based Outlier Filtering**:

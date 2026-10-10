@@ -138,6 +138,62 @@ export default function RewardsPage() {
           </span>
         </div>
 
+        {/* On-Chain Anchor Mathematical Formula Box */}
+        <div className="p-4 sm:p-5 rounded-xl bg-white border-2 border-[#1C1917] space-y-3">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 border-b border-[#1C1917]/10 pb-2">
+            <span className="text-[11px] font-mono font-bold uppercase text-[#78716C]">
+              Solana Anchor Smart Contract Payout Formula (lib.rs)
+            </span>
+            <span className="text-[10px] font-mono font-bold text-[#D97706] bg-amber-50 px-2 py-0.5 rounded border border-amber-200 w-fit">
+              Normalized in Basis Points (10,000 bps = 1.0)
+            </span>
+          </div>
+
+          <div className="p-3.5 sm:p-4 bg-[#FAF7F2] rounded-lg border border-[#1C1917]/20 font-mono text-center overflow-x-auto">
+            <div className="text-xs sm:text-sm font-bold text-[#1C1917] inline-flex items-center gap-2 flex-wrap justify-center py-1">
+              <span className="text-[#E05338] font-black text-sm sm:text-base">Reward (SOL)</span>
+              <span className="text-stone-400 font-bold">=</span>
+              <span className="px-2 py-1 rounded bg-white border border-[#1C1917]/30 font-black text-[#1C1917]">BaseRate</span>
+              <span className="text-stone-400 font-bold">×</span>
+              <span className="inline-flex items-center px-1.5 py-0.5 rounded bg-white border border-[#1C1917]/20 shadow-xs">
+                <span>(</span>
+                <span className="inline-flex flex-col text-[11px] mx-1 text-center">
+                  <span className="border-b border-[#1C1917] pb-0.5 text-emerald-800 font-black">Quality Gain</span>
+                  <span className="pt-0.5 text-stone-500 font-medium">10,000</span>
+                </span>
+                <span>)</span>
+              </span>
+              <span className="text-stone-400 font-bold">×</span>
+              <span className="inline-flex items-center px-1.5 py-0.5 rounded bg-white border border-[#1C1917]/20 shadow-xs">
+                <span>(</span>
+                <span className="inline-flex flex-col text-[11px] mx-1 text-center">
+                  <span className="border-b border-[#1C1917] pb-0.5 text-purple-800 font-black">Proof Validity</span>
+                  <span className="pt-0.5 text-stone-500 font-medium">10,000</span>
+                </span>
+                <span>)</span>
+              </span>
+              <span className="text-stone-400 font-bold">×</span>
+              <span className="inline-flex items-center px-1.5 py-0.5 rounded bg-white border border-[#1C1917]/20 shadow-xs">
+                <span>(</span>
+                <span className="inline-flex flex-col text-[11px] mx-1 text-center">
+                  <span className="border-b border-[#1C1917] pb-0.5 text-blue-800 font-black">Compute Weight</span>
+                  <span className="pt-0.5 text-stone-500 font-medium">10,000</span>
+                </span>
+                <span>)</span>
+              </span>
+              <span className="text-stone-400 font-bold">×</span>
+              <span className="inline-flex items-center px-1.5 py-0.5 rounded bg-white border border-[#1C1917]/20 shadow-xs">
+                <span>(</span>
+                <span className="inline-flex flex-col text-[11px] mx-1 text-center">
+                  <span className="border-b border-[#1C1917] pb-0.5 text-amber-800 font-black">Model Utility</span>
+                  <span className="pt-0.5 text-stone-500 font-medium">10,000</span>
+                </span>
+                <span>)</span>
+              </span>
+            </div>
+          </div>
+        </div>
+
         {/* Dynamic Equation Strip */}
         <div className="p-3.5 rounded-xl bg-[#F7F4EE] border border-[#1C1917]/25 font-mono text-xs flex flex-wrap items-center justify-center gap-1.5 sm:gap-2 text-[#1C1917] text-center">
           <span className="font-black text-[#E05338]">Reward</span>
