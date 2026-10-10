@@ -61,6 +61,8 @@ class NetworkOrchestrator:
         self.is_round_active: bool = False
         self.stop_requested: bool = False
         self.current_round_progress: Dict[str, Any] = {}
+        self.last_round_stats: Optional[Dict[str, Any]] = None
+        self.active_pipeline_step: Optional[int] = None
 
         # Seed initial model on Arbitrum and in DB if not present
         self._bootstrap_initial_state()
@@ -1004,15 +1006,37 @@ class NetworkOrchestrator:
                 "round_number": round_number,
             })
 
+            # Natural per-epoch pacing so external daemons and UI train in lockstep
+            time.sleep(1.2)
+
+        # Check if we need to synchronize with native worker daemons
+        if online_daemons:
+            max_daemon_wait = min(20.0, max(6.0, actual_epochs * 1.5))
+            log_msg("Coordinator", f"[DAEMON_SYNC] Awaiting updates from {len(online_daemons)} native worker daemon(s) (timeout: {max_daemon_wait:.1f}s)...")
+            start_wait = time.time()
+            while (time.time() - start_wait < max_daemon_wait) and not self.stop_requested:
+                all_received = True
+                for w_norm, c_norm, d_name in online_daemons:
+                    if not (self.worker_updates.get(f"{w_norm}_{round_number}") or self.worker_updates.get(f"{c_norm}_{round_number}")):
+                        all_received = False
+                        break
+                if all_received:
+                    log_msg("Coordinator", f"[DAEMON_SYNC] Successfully synchronized update(s) from native worker daemon(s)!")
+                    break
+                time.sleep(0.5)
+
         # -------------------------------------------------------------
         # STEP 2: LOCAL RESULTS FINALIZATION & ZKML PROOF SYNTHESIS
         # -------------------------------------------------------------
+        self.active_pipeline_step = 2
         ws_manager.broadcast_sync("STEP_PROGRESS", {
             "step": 2,
             "step_name": "ZKML_SYNTHESIS",
             "round_number": round_number,
         })
+        time.sleep(1.0)
 
+        prepared_contributions = []
         for client_id, client in participating_clients.items():
             # Check for native daemon update fallback
             w_norm = (client.wallet_address or "").lower()
@@ -1112,16 +1136,33 @@ class NetworkOrchestrator:
                 expected_round_id=round_number,
             )
 
-            # Step 3: Arbitrum ContributionRegistry submission
-            ws_manager.broadcast_sync("STEP_PROGRESS", {
-                "step": 3,
-                "step_name": "ARBITRUM_VERIFY",
-                "client_name": client.name,
-                "client_id": client.client_id,
-                "round_number": round_number,
+            prepared_contributions.append({
+                "client_id": client_id,
+                "client": client,
+                "local_res": local_res,
+                "proof_bundle": proof_bundle,
+                "is_valid": is_valid,
+                "verify_msg": verify_msg,
             })
-            log_msg("Arbitrum", f"[VERIFY_SUBMIT] Verifying proof for {client.name} on ZKVerifier.sol & ContributionRegistry.sol...")
 
+        # -------------------------------------------------------------
+        # STEP 3: ARBITRUM L2 ON-CHAIN VERIFICATION & REGISTRY
+        # -------------------------------------------------------------
+        self.active_pipeline_step = 3
+        ws_manager.broadcast_sync("STEP_PROGRESS", {
+            "step": 3,
+            "step_name": "ARBITRUM_VERIFY",
+            "round_number": round_number,
+        })
+        time.sleep(1.0)
+
+        for item in prepared_contributions:
+            client = item["client"]
+            local_res = item["local_res"]
+            proof_bundle = item["proof_bundle"]
+            is_valid = item["is_valid"]
+
+            log_msg("Arbitrum", f"[VERIFY_SUBMIT] Verifying proof for {client.name} on ZKVerifier.sol & ContributionRegistry.sol...")
             arb_ok, arb_evt = self.arbitrum.submit_contribution(
                 contributor=client.wallet_address,
                 model_id=self.model_id,
@@ -1132,11 +1173,15 @@ class NetworkOrchestrator:
                 public_inputs=proof_bundle["public_inputs_decimal"],
                 is_proof_valid=is_valid,
             )
+            item["arb_ok"] = arb_ok
+            item["arb_evt"] = arb_evt
             arbitrum_events.append(arb_evt)
+
             if is_valid and arb_ok:
                 log_msg("Arbitrum", f"[PAIRING_VALID] Proof VALID: Pairing check passed. Event ContributionVerified emitted (Tx: {arb_evt.get('tx_hash', '')[:16]}...)")
             else:
                 log_msg("Arbitrum", f"[PAIRING_REJECT] Proof REJECTED: Constraint mismatch. Contribution disallowed.")
+
             ws_manager.broadcast_sync("ARBITRUM_VERIFIED", {
                 "client_name": client.name,
                 "client_id": client.client_id,
@@ -1145,14 +1190,25 @@ class NetworkOrchestrator:
                 "round_number": round_number,
             })
 
-            # Step 4: Cross-Chain Relayer -> Solana Program Execution
-            ws_manager.broadcast_sync("STEP_PROGRESS", {
-                "step": 4,
-                "step_name": "SOLANA_REWARD",
-                "client_name": client.name,
-                "client_id": client.client_id,
-                "round_number": round_number,
-            })
+        # -------------------------------------------------------------
+        # STEP 4: CROSS-CHAIN RELAYER & SOLANA REWARD INCENTIVES
+        # -------------------------------------------------------------
+        self.active_pipeline_step = 4
+        ws_manager.broadcast_sync("STEP_PROGRESS", {
+            "step": 4,
+            "step_name": "SOLANA_REWARD",
+            "round_number": round_number,
+        })
+        time.sleep(1.0)
+
+        for item in prepared_contributions:
+            client = item["client"]
+            local_res = item["local_res"]
+            proof_bundle = item["proof_bundle"]
+            is_valid = item["is_valid"]
+            arb_ok = item.get("arb_ok", False)
+            arb_evt = item.get("arb_evt", {})
+
             sol_result = {"success": False, "reward_amount": 0.0, "tx_signature": None}
             if is_valid and arb_ok:
                 log_msg("Relayer", f"[BRIDGE_FORWARD] Cross-Chain Relayer forwarding Arbitrum verification event to Solana Program...")
@@ -1188,18 +1244,22 @@ class NetworkOrchestrator:
                 "local_res": local_res,
                 "proof_bundle": proof_bundle,
                 "is_valid": is_valid,
-                "verify_msg": verify_msg,
+                "verify_msg": item.get("verify_msg", ""),
                 "arb_tx": arb_evt.get("tx_hash"),
                 "sol_tx": sol_result.get("tx_signature"),
                 "reward": sol_result.get("reward_amount", 0.0),
             })
 
-        # Step 5: Robust FedAvg Aggregation (Norm clipping & outlier rejection)
+        # -------------------------------------------------------------
+        # STEP 5: ROBUST FEDAVG CONSENSUS & GLOBAL MODEL UPDATE
+        # -------------------------------------------------------------
+        self.active_pipeline_step = 5
         ws_manager.broadcast_sync("STEP_PROGRESS", {
             "step": 5,
             "step_name": "FEDAVG_MERGE",
             "round_number": round_number,
         })
+        time.sleep(1.0)
         log_msg("Aggregator", f"[FEDAVG_INIT] Robust FedAvg aggregation initiated over {len(client_updates)} update vectors...")
 
         # Explicitly inspect and log incoming weight vectors from all contributing nodes
@@ -1276,7 +1336,7 @@ class NetworkOrchestrator:
         log_msg("Arbitrum", f"[MODEL_REGISTRY] ModelRegistry.sol updated on-chain. Storage CID: {storage_cid} (Tx: {arb_round_evt.get('tx_hash', '')[:16]}...)")
         log_msg("Coordinator", f"[ROUND_COMPLETE] Round #{round_number} complete! {len(agg_result['accepted_clients'])} nodes rewarded. ZERO raw data uploaded.")
 
-        ws_manager.broadcast_sync("ROUND_COMPLETED", {
+        round_stats_payload = {
             "round_number": round_number,
             "duration_sec": round(time.time() - start_time, 2),
             "accuracy_before": round(eval_before["accuracy"] * 100, 2),
@@ -1292,7 +1352,10 @@ class NetworkOrchestrator:
             "arbitrum_tx": arb_round_evt.get("tx_hash"),
             "accepted_nodes": len(agg_result["accepted_clients"]),
             "solana_payouts_count": len([p for p in solana_payouts if p.get("success")]),
-        })
+        }
+        self.last_round_stats = round_stats_payload
+        self.active_pipeline_step = None
+        ws_manager.broadcast_sync("ROUND_COMPLETED", round_stats_payload)
 
         # Step 8: Persist all round metadata in Database
         try:

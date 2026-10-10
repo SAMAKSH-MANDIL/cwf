@@ -1012,6 +1012,46 @@ export default function TrainingPage() {
     deltaAggNorm?: number;
   } | null>(null);
 
+  // Background state synchronizer: auto-reconciles if WebSocket disconnects or drops frames
+  useEffect(() => {
+    const syncInterval = setInterval(async () => {
+      try {
+        const res = await fetch("/api/training/status");
+        if (!res.ok) return;
+        const st = await res.json();
+        if (!st.is_training && isTraining) {
+          setIsTraining(false);
+          setRemainingTrainingSeconds(0);
+          setTrainingProgressPct(100);
+          setActiveStep(6);
+          if (st.last_round_stats) {
+            setLastRoundStats({
+              round: st.last_round_stats.round_number,
+              durationSec: st.last_round_stats.duration_sec,
+              accBefore: st.last_round_stats.accuracy_before,
+              accAfter: st.last_round_stats.accuracy_after,
+              lossBefore: st.last_round_stats.loss_before,
+              lossAfter: st.last_round_stats.loss_after,
+              zkProofHash: st.last_round_stats.new_model_hash?.substring(0, 18) || "0x...",
+              arbitrumTx: st.last_round_stats.arbitrum_tx?.substring(0, 18) || "0x...",
+              solanaSig: `SolanaSettled_${st.last_round_stats.round_number}`,
+              aggregatedWeightsPreview: st.last_round_stats.aggregated_weights_preview,
+              aggregatedNorm: st.last_round_stats.aggregated_norm,
+              deltaAggNorm: st.last_round_stats.delta_agg_norm,
+            });
+          }
+          setTimeout(() => setActiveStep(null), 5000);
+        } else if (st.is_training && st.active_step && isTraining) {
+          setActiveStep(st.active_step);
+        }
+      } catch (e) {
+        // silent
+      }
+    }, 2000);
+
+    return () => clearInterval(syncInterval);
+  }, [isTraining]);
+
   const [mounted, setMounted] = useState(false);
   const logsEndRef = useRef<HTMLDivElement>(null);
   const executionBoxRef = useRef<HTMLDivElement>(null);
@@ -1319,6 +1359,7 @@ export default function TrainingPage() {
               setRemainingTrainingSeconds(0);
               setTrainingProgressPct(100);
               setCurrentPacingEpoch(null);
+              setActiveStep(6);
               setLastRoundStats({
                 round: data.round_number,
                 durationSec: data.duration_sec ?? elapsedTrainingSeconds,
@@ -1333,7 +1374,7 @@ export default function TrainingPage() {
                 aggregatedNorm: data.aggregated_norm,
                 deltaAggNorm: data.delta_agg_norm,
               });
-              setTimeout(() => setActiveStep(null), 5000);
+              setTimeout(() => setActiveStep(null), 6000);
             }
           } catch (e) {
             console.error("Failed to parse WS payload", e);

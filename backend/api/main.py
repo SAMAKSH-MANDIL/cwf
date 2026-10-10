@@ -246,12 +246,28 @@ def run_live_round(payload: RunRoundRequest = RunRoundRequest()):
     }
 
 
+@app.get("/api/training/status")
+def get_training_status():
+    """Returns real-time execution status of the federated network orchestrator."""
+    return {
+        "is_training": orchestrator.is_round_active,
+        "current_round": orchestrator.fl_coordinator.current_round,
+        "last_round_number": getattr(orchestrator, "last_round_number", 0),
+        "active_step": getattr(orchestrator, "active_pipeline_step", None),
+        "last_round_stats": getattr(orchestrator, "last_round_stats", None),
+        "active_clients_count": len(orchestrator.fl_coordinator.clients),
+    }
+
+
 @app.get("/api/training/latest-round-logs")
 def get_latest_round_logs():
     """Returns the most recent round's live node execution logs for multi-device sync."""
     return {
         "round_number": getattr(orchestrator, "last_round_number", 0),
         "node_logs": getattr(orchestrator, "last_round_logs", {}),
+        "is_training": orchestrator.is_round_active,
+        "active_step": getattr(orchestrator, "active_pipeline_step", None),
+        "last_round_stats": getattr(orchestrator, "last_round_stats", None),
     }
 
 

@@ -18,6 +18,12 @@ class TrainingWebSocketManager:
     def __init__(self):
         self.active_connections: List[WebSocket] = []
         self._loop: Optional[asyncio.AbstractEventLoop] = None
+        self._send_lock: Optional[asyncio.Lock] = None
+
+    def _get_send_lock(self) -> asyncio.Lock:
+        if self._send_lock is None:
+            self._send_lock = asyncio.Lock()
+        return self._send_lock
 
     def set_loop(self, loop: asyncio.AbstractEventLoop):
         self._loop = loop
@@ -40,23 +46,28 @@ class TrainingWebSocketManager:
 
     def disconnect(self, websocket: WebSocket):
         if websocket in self.active_connections:
-            self.active_connections.remove(websocket)
+            try:
+                self.active_connections.remove(websocket)
+            except ValueError:
+                pass
 
     async def broadcast(self, event_type: str, data: Dict[str, Any]):
-        """Asynchronously send an event frame to all connected clients."""
+        """Asynchronously send an event frame to all connected clients under a lock."""
         payload = {
             "event": event_type,
             "timestamp": time.time(),
             "data": data,
         }
-        to_remove = []
-        for connection in list(self.active_connections):
-            try:
-                await connection.send_json(payload)
-            except Exception:
-                to_remove.append(connection)
-        for conn in to_remove:
-            self.disconnect(conn)
+        lock = self._get_send_lock()
+        async with lock:
+            to_remove = []
+            for connection in list(self.active_connections):
+                try:
+                    await connection.send_json(payload)
+                except Exception:
+                    to_remove.append(connection)
+            for conn in to_remove:
+                self.disconnect(conn)
 
     def broadcast_sync(self, event_type: str, data: Dict[str, Any]):
         """
