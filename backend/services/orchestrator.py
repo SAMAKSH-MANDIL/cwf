@@ -971,19 +971,6 @@ class NetworkOrchestrator:
                 cur_w = client.local_model.get_weights_flat()
                 delta_norm = float(np.linalg.norm(cur_w - base_weights))
 
-                # Hardware telemetry formatting
-                hw_tier = getattr(client, "compute_tier", "Edge Enclave")
-                t_str = time.strftime("%H:%M:%S")
-                ep_line = f"[{t_str}] [{client.name}] [EPOCH_STREAM] Epoch {ep}/{actual_epochs}: Batch Loss = {avg_loss:.4f} | Accuracy = {cur_acc:.1f}% | Grad Delta = {delta_norm:.4f} | Enclave TEE ({hw_tier})"
-                node_logs[client.client_id].append(ep_line)
-                execution_logs.append(ep_line)
-                log_msg(client.name, f"[EPOCH_STREAM] Epoch {ep}/{actual_epochs}: Batch Loss = {avg_loss:.4f} | Accuracy = {cur_acc:.1f}% | Grad Delta = {delta_norm:.4f} | Enclave TEE ({hw_tier})")
-                w_addr = getattr(client, "wallet_address", "")
-                if w_addr:
-                    if w_addr not in node_logs:
-                        node_logs[w_addr] = []
-                    node_logs[w_addr].append(ep_line)
-
                 ws_manager.broadcast_sync("EPOCH_PROGRESS", {
                     "client_name": client.name,
                     "client_id": client.client_id,

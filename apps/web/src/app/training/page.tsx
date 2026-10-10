@@ -1306,28 +1306,6 @@ export default function TrainingPage() {
                   delta_norm: data.delta_norm,
                 });
               }
-              const ts = new Date().toLocaleTimeString();
-              const cName = data.client_name || data.client_id || "Worker";
-              const logLine = `[${ts}] [${cName}] [EPOCH_STREAM] Epoch ${data.epoch}/${data.total_epochs} | Loss = ${data.loss} | Acc = ${data.accuracy ?? "--"}% | Hardware SGD Telemetry`;
-              setNodeLogs((prev) => {
-                const next = { ...prev };
-                const cKey = cName.toLowerCase();
-                const matched = edgeNodes.find(
-                  (n) =>
-                    n.name.toLowerCase() === cKey ||
-                    n.id.toLowerCase() === cKey ||
-                    n.wallet_address.toLowerCase() === cKey ||
-                    cKey.includes(n.name.toLowerCase()) ||
-                    n.name.toLowerCase().includes(cKey)
-                );
-                const targetKey = matched ? matched.id : cName;
-                if (targetKey) {
-                  next[targetKey] = [...(next[targetKey] || []), logLine];
-                }
-                next[cName] = [...(next[cName] || []), logLine];
-                next["all"] = [...(next["all"] || []), logLine];
-                return next;
-              });
 
             } else if (evtType === "ZK_PROOF_GENERATED") {
               setLastRoundStats((prev: any) => ({
