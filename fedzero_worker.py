@@ -21,6 +21,7 @@ import urllib.error
 import urllib.parse
 import importlib.util
 import subprocess
+import platform
 
 # ------------------------------------------------------------------------------
 # Auto-Dependency Manager: Automatically installs missing packages on launch
@@ -63,7 +64,7 @@ np = None
 DEVICE = None
 
 try:
-    import torch as _torch
+    import torch as _torch  # type: ignore # pyrefly: ignore[missing-import]
     torch = _torch
     if torch.cuda.is_available():
         DEVICE = torch.device("cuda")
@@ -478,9 +479,6 @@ def detect_real_system_hardware():
     Detects true, authentic hardware specs (OS, CPU, GPU, VRAM, and System RAM)
     directly from host machine OS APIs and device drivers.
     """
-    import platform
-    import subprocess
-
     # 1. Operating System
     os_name = f"{platform.system()} {platform.release()}"
 
