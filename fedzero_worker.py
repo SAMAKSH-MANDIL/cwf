@@ -322,6 +322,34 @@ def http_get(url, timeout=10):
         return {"error": str(e)}
 
 
+def stream_log(server_url: str, node_name: str, wallet: str, message: str):
+    """Streams real-time console/telemetry logs to master coordinator so root device sees live execution."""
+    try:
+        http_post(f"{server_url}/api/worker/log", {
+            "node_name": node_name,
+            "wallet_address": wallet,
+            "message": message,
+        }, timeout=2)
+    except Exception:
+        pass
+
+
+def stream_epoch(server_url: str, node_name: str, wallet: str, epoch: int, total_epochs: int, loss: float, round_id: int):
+    """Streams live epoch SGD progress to master coordinator."""
+    try:
+        http_post(f"{server_url}/api/worker/epoch-progress", {
+            "node_name": node_name,
+            "wallet_address": wallet,
+            "epoch": epoch,
+            "total_epochs": total_epochs,
+            "loss": round(float(loss), 4),
+            "round_id": round_id,
+        }, timeout=2)
+    except Exception:
+        pass
+
+
+
 # ------------------------------------------------------------------------------
 # GPU Monitor (NVIDIA only, optional)
 # ------------------------------------------------------------------------------
@@ -510,6 +538,7 @@ def main():
         print(f"[WARNING] Register notice: {reg_res['error']} (Will continue polling)")
     else:
         print(f"[NETWORK] SUCCESS! Node '{args.name}' registered to Federated Mesh.")
+        stream_log(server_url, args.name, wallet_address, f"[NODE_CONNECTED] Enclave initialized on {hardware_tier} ({vram_gb} GB VRAM). {len(y_local)} private records mounted.")
 
     # Create model on appropriate backend
     model = create_model(seed=seed)
@@ -528,6 +557,8 @@ def main():
                     print(f"  [DISPATCH RECEIVED] Federated Round #{round_id} triggered by Coordinator!")
                     print("#" * 72)
 
+                    stream_log(server_url, args.name, wallet_address, f"[JOB_RECEIVED] Round #{round_id} triggered. Initializing local SGD on [{backend_label()}]...")
+
                     global_weights = poll_res.get("global_weights", [])
                     epochs = poll_res.get("epochs", 4)
                     lr = poll_res.get("learning_rate", 0.03)
@@ -541,6 +572,7 @@ def main():
 
                     loss_before, acc_before = model.evaluate(X_local, y_local)
                     print(f"--> Baseline: Loss = {loss_before:.4f} | Accuracy = {acc_before*100:.1f}%")
+                    stream_log(server_url, args.name, wallet_address, f"[BASELINE] Initial Loss: {loss_before:.4f} | Accuracy: {acc_before*100:.1f}% | Training {epochs} Epochs (lr={lr})")
                     print(f"--> Starting {epochs} Local SGD Epochs on [{backend_label()}]...")
 
                     # GPU stats before training
@@ -556,21 +588,28 @@ def main():
                         try:
                             model, epoch_logs = pipeline_mod.train_step(model, X_local, y_local, epochs=epochs, lr=lr)
                             for el in epoch_logs:
-                                print(f"    [*] Epoch {el.get('epoch', '?')}/{epochs}: Loss = {el.get('loss', 0):.4f} | Pipeline step complete")
+                                ep_num = el.get("epoch", 1)
+                                ep_l = el.get("loss", 0.0)
+                                print(f"    [*] Epoch {ep_num}/{epochs}: Loss = {ep_l:.4f} | Pipeline step complete")
+                                stream_epoch(server_url, args.name, wallet_address, ep_num, epochs, ep_l, round_id)
+                                stream_log(server_url, args.name, wallet_address, f"[EPOCH] Epoch {ep_num}/{epochs}: Local Loss = {ep_l:.4f}")
                         except Exception as p_err:
                             print(f"[PIPELINE_FALLBACK] Custom step raised {p_err}. Executing default SGD...")
                             for ep in range(1, epochs + 1):
                                 ep_loss = model.train_epoch(X_local, y_local, lr=lr)
                                 epoch_logs.append({"epoch": ep, "loss": ep_loss})
                                 print(f"    [*] Epoch {ep}/{epochs}: Local Loss = {ep_loss:.4f} | Step complete")
+                                stream_epoch(server_url, args.name, wallet_address, ep, epochs, ep_loss, round_id)
+                                stream_log(server_url, args.name, wallet_address, f"[EPOCH] Epoch {ep}/{epochs}: Local Loss = {ep_loss:.4f}")
                                 time.sleep(0.08)
                     else:
                         for ep in range(1, epochs + 1):
                             ep_loss = model.train_epoch(X_local, y_local, lr=lr)
                             epoch_logs.append({"epoch": ep, "loss": ep_loss})
                             print(f"    [*] Epoch {ep}/{epochs}: Local Loss = {ep_loss:.4f} | Step complete")
+                            stream_epoch(server_url, args.name, wallet_address, ep, epochs, ep_loss, round_id)
+                            stream_log(server_url, args.name, wallet_address, f"[EPOCH] Epoch {ep}/{epochs}: Local Loss = {ep_loss:.4f}")
                             time.sleep(0.08)
-
 
                     t_elapsed = time.time() - t_start
 
@@ -586,6 +625,7 @@ def main():
 
                     print(f"\n--> Local SGD complete in {t_elapsed:.2f}s using [{backend_label()}]!")
                     print(f"--> Result: Loss {loss_before:.4f} -> {loss_after:.4f} (Accuracy Gain: +{acc_gain*100:.1f}%)")
+                    stream_log(server_url, args.name, wallet_address, f"[CONVERGED] Local SGD complete in {t_elapsed:.2f}s. Loss: {loss_before:.4f} -> {loss_after:.4f} (Gain: +{acc_gain*100:.1f}%)")
 
                     # Weight delta + SHA-256
                     new_weights_flat = model.get_weights_flat()
@@ -622,12 +662,15 @@ def main():
                     }
 
                     print("[SUBMIT] Transmitting locally computed gradients to Master Coordinator...")
+                    stream_log(server_url, args.name, wallet_address, f"[SUBMIT_WEIGHTS] Gradient update hash: {update_hash[:16]}... (Delta norm = {delta_norm:.4f}). Transmitting to coordinator.")
                     sub_res = http_post(f"{server_url}/api/worker/submit-update", submit_payload)
                     if "error" in sub_res:
                         print(f"[ERROR] Submission failed: {sub_res['error']}")
+                        stream_log(server_url, args.name, wallet_address, f"[SUBMIT_FAILED] Error: {sub_res['error']}")
                     else:
                         print(f"[SUCCESS] Round #{round_id} update ACCEPTED by Coordinator!")
                         print(f"[REWARD] Incentive tokens disbursed to wallet {wallet_address[:12]}...")
+                        stream_log(server_url, args.name, wallet_address, f"[ACCEPTED] Coordinator accepted update for Round #{round_id}! Verified in Byzantine FedAvg.")
 
                     last_completed_round = round_id
                     print("\n[STANDBY] Returning to standby for next round...\n")

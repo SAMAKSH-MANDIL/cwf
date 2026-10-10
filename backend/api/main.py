@@ -466,7 +466,49 @@ def submit_worker_update(payload: Dict[str, Any]):
     return orchestrator.submit_worker_update(payload)
 
 
+class WorkerLogRequest(BaseModel):
+    node_name: str
+    message: str
+    wallet_address: Optional[str] = None
+    level: Optional[str] = "INFO"
+
+
+@app.post("/api/worker/log")
+def receive_worker_log(payload: WorkerLogRequest):
+    """Streams real-time console/telemetry log from an external worker to coordinator and WebSocket."""
+    orchestrator.record_worker_log(
+        node_name=payload.node_name,
+        message=payload.message,
+        wallet=payload.wallet_address,
+    )
+    return {"status": "LOG_BROADCASTED"}
+
+
+class WorkerEpochRequest(BaseModel):
+    node_name: str
+    epoch: int
+    total_epochs: int
+    loss: float
+    wallet_address: Optional[str] = None
+    round_id: Optional[int] = None
+
+
+@app.post("/api/worker/epoch-progress")
+def receive_worker_epoch(payload: WorkerEpochRequest):
+    """Streams per-epoch local SGD loss from external device to frontend WebSocket in real-time."""
+    orchestrator.record_worker_epoch(
+        node_name=payload.node_name,
+        epoch=payload.epoch,
+        total_epochs=payload.total_epochs,
+        loss=payload.loss,
+        wallet=payload.wallet_address,
+        round_id=payload.round_id,
+    )
+    return {"status": "EPOCH_STREAMED"}
+
+
 @app.get("/api/worker/download")
+
 def download_worker_script():
     """Serves the standalone fedzero_worker.py for external client download."""
     script_path = os.path.abspath("fedzero_worker.py")

@@ -396,8 +396,58 @@ class NetworkOrchestrator:
             "received_at": time.time(),
         }
 
+    def record_worker_log(self, node_name: str, message: str, wallet: Optional[str] = None):
+        """Streams real-time log lines from external device to WebSocket & logs buffer."""
+        t_str = time.strftime("%H:%M:%S")
+        clean_msg = EMOJI_REGEX.sub("", message).strip()
+        line = f"[{t_str}] [{node_name}] {clean_msg}"
+        if node_name not in self.last_round_logs:
+            self.last_round_logs[node_name] = []
+        self.last_round_logs[node_name].append(line)
+        if wallet:
+            w_norm = wallet.lower()
+            if w_norm not in self.last_round_logs:
+                self.last_round_logs[w_norm] = []
+            self.last_round_logs[w_norm].append(line)
+
+        ws_manager.broadcast_sync("LOG_EMITTED", {
+            "tag": node_name,
+            "message": clean_msg,
+            "line": line,
+            "round_number": self.fl_coordinator.current_round,
+        })
+
+    def record_worker_epoch(self, node_name: str, epoch: int, total_epochs: int, loss: float, wallet: Optional[str] = None, round_id: Optional[int] = None):
+        """Streams live epoch SGD loss from external device to WebSocket."""
+        t_str = time.strftime("%H:%M:%S")
+        line = f"[{t_str}] [{node_name}] [LOCAL_EPOCH] Epoch {epoch}/{total_epochs}: Local Loss = {loss:.4f} | Real hardware execution"
+        if node_name not in self.last_round_logs:
+            self.last_round_logs[node_name] = []
+        self.last_round_logs[node_name].append(line)
+        if wallet:
+            w_norm = wallet.lower()
+            if w_norm not in self.last_round_logs:
+                self.last_round_logs[w_norm] = []
+            self.last_round_logs[w_norm].append(line)
+
+        ws_manager.broadcast_sync("LOG_EMITTED", {
+            "tag": node_name,
+            "message": line,
+            "line": line,
+            "round_number": round_id or self.fl_coordinator.current_round,
+        })
+        ws_manager.broadcast_sync("EPOCH_PROGRESS", {
+            "client_name": node_name,
+            "client_id": node_name,
+            "epoch": epoch,
+            "total_epochs": total_epochs,
+            "loss": round(float(loss), 4),
+            "round_number": round_id or self.fl_coordinator.current_round,
+        })
+
     def execute_live_round(
         self,
+
         local_epochs: int = 4,
         learning_rate: float = 0.03,
         simulate_corrupt_proof_node: Optional[str] = None,
@@ -514,8 +564,9 @@ class NetworkOrchestrator:
                 online_daemons.append((w_norm, c_norm, cl.name))
 
         if online_daemons:
-            log_msg("Coordinator", f"[DAEMON_SYNC] Awaiting real local hardware SGD completion from {len(online_daemons)} online native worker daemon(s)...")
-            wait_deadline = time.time() + 3.5
+            wait_sec = max(18.0, local_epochs * 3.0)
+            log_msg("Coordinator", f"[DAEMON_SYNC] Awaiting real local hardware SGD completion from {len(online_daemons)} online native worker daemon(s) (Timeout: {wait_sec:.0f}s)...")
+            wait_deadline = time.time() + wait_sec
             while time.time() < wait_deadline:
                 all_received = True
                 for w_n, c_n, _ in online_daemons:
@@ -523,8 +574,9 @@ class NetworkOrchestrator:
                         all_received = False
                         break
                 if all_received:
+                    log_msg("Coordinator", f"[DAEMON_SYNC] Received completed gradient updates from all online native worker daemon(s)!")
                     break
-                time.sleep(0.1)
+                time.sleep(0.15)
 
         # Step 1 & 2: Local training & zkML proof synthesis for each client
         for client_id, client in participating_clients.items():

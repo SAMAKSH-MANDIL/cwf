@@ -659,6 +659,27 @@ export default function TrainingPage() {
     }
   }, [edgeNodes]);
 
+  // Dynamically include any external edge laptop that sent logs into the multi-terminal grid
+  const displayedGridNodes = useMemo(() => {
+    const list = [...activeNodes];
+    Object.keys(nodeLogs).forEach((k) => {
+      const kLower = k.toLowerCase();
+      if (["all", "coordinator", "aggregator", "arbitrum", "solana", "relayer"].includes(kLower)) return;
+      if (!list.some((n) => n.id === k || n.name.toLowerCase() === kLower || n.wallet_address.toLowerCase() === kLower)) {
+        list.push({
+          id: k,
+          name: k,
+          hardware_tier: "External Edge Laptop",
+          vram_gb: 8,
+          samples_count: 120,
+          wallet_address: `0x${kLower.replace(/[^a-f0-9]/g, "").padEnd(40, "0").slice(0, 42)}`,
+          enabled: true,
+        });
+      }
+    });
+    return list;
+  }, [activeNodes, nodeLogs]);
+
   // Real-Time WebSocket Telemetry Connection & Multi-Node Event Bus
   useEffect(() => {
     let ws: WebSocket | null = null;
@@ -723,36 +744,67 @@ export default function TrainingPage() {
               const { tag, line } = data;
               setNodeLogs((prev) => {
                 const next = { ...prev };
+                const tLower = (tag || "").toLowerCase();
                 const matched = edgeNodes.find(
                   (n) =>
-                    n.name.toLowerCase() === (tag || "").toLowerCase() ||
-                    n.id.toLowerCase() === (tag || "").toLowerCase() ||
-                    n.wallet_address.toLowerCase() === (tag || "").toLowerCase()
+                    n.name.toLowerCase() === tLower ||
+                    n.id.toLowerCase() === tLower ||
+                    n.wallet_address.toLowerCase() === tLower ||
+                    tLower.includes(n.name.toLowerCase()) ||
+                    n.name.toLowerCase().includes(tLower)
                 );
-                if (matched) {
-                  next[matched.id] = [...(next[matched.id] || []), line];
-                } else {
-                  activeNodes.forEach((node) => {
-                    next[node.id] = [...(next[node.id] || []), line];
+
+                // Dynamically ensure node exists in edgeNodes if external device sends logs
+                if (!matched && tag && !["Coordinator", "Aggregator", "Arbitrum", "Solana", "Relayer"].includes(tag)) {
+                  setEdgeNodes((curr) => {
+                    if (curr.some((c) => c.name.toLowerCase() === tLower)) return curr;
+                    return [
+                      ...curr,
+                      {
+                        id: tag,
+                        name: tag,
+                        hardware_tier: "External Edge Node",
+                        vram_gb: 8,
+                        samples_count: 120,
+                        wallet_address: `0x${tag.toLowerCase().replace(/[^a-f0-9]/g, "").padEnd(40, "0").slice(0, 42)}`,
+                        enabled: true,
+                      },
+                    ];
                   });
                 }
+
+                const targetKey = matched ? matched.id : tag;
+                if (targetKey) {
+                  next[targetKey] = [...(next[targetKey] || []), line];
+                }
+                next[tag] = [...(next[tag] || []), line];
+                next["all"] = [...(next["all"] || []), line];
                 return next;
               });
             } else if (evtType === "EPOCH_PROGRESS") {
               const ts = new Date().toLocaleTimeString();
-              const logLine = `[${ts}] [SGD_STEP] Epoch ${data.epoch}/${data.total_epochs} | Batch Loss = ${data.loss} | Live telemetry streamed via WebSocket`;
+              const cName = data.client_name || data.client_id || "Worker";
+              const logLine = `[${ts}] [${cName}] [EPOCH_STREAM] Epoch ${data.epoch}/${data.total_epochs} | Batch Loss = ${data.loss} | Hardware SGD Telemetry`;
               setNodeLogs((prev) => {
                 const next = { ...prev };
+                const cKey = cName.toLowerCase();
                 const matched = edgeNodes.find(
                   (n) =>
-                    n.name.toLowerCase() === (data.client_name || "").toLowerCase() ||
-                    n.id.toLowerCase() === (data.client_id || "").toLowerCase()
+                    n.name.toLowerCase() === cKey ||
+                    n.id.toLowerCase() === cKey ||
+                    n.wallet_address.toLowerCase() === cKey ||
+                    cKey.includes(n.name.toLowerCase()) ||
+                    n.name.toLowerCase().includes(cKey)
                 );
-                if (matched) {
-                  next[matched.id] = [...(next[matched.id] || []), logLine];
+                const targetKey = matched ? matched.id : cName;
+                if (targetKey) {
+                  next[targetKey] = [...(next[targetKey] || []), logLine];
                 }
+                next[cName] = [...(next[cName] || []), logLine];
+                next["all"] = [...(next["all"] || []), logLine];
                 return next;
               });
+
             } else if (evtType === "ZK_PROOF_GENERATED") {
               setLastRoundStats((prev: any) => ({
                 ...(prev || {}),
@@ -867,15 +919,19 @@ export default function TrainingPage() {
 
   const copyLogs = (key: string) => {
     let text = "";
-    if (key === "all") {
-      text = Object.entries(nodeLogs)
-        .map(([nid, lines]) => {
-          const n = edgeNodes.find((x) => x.id === nid);
-          return `=== NODE: ${n?.name || nid} ===\n` + lines.join("\n");
-        })
-        .join("\n\n");
+    if (key === "consolidated") {
+      text = (nodeLogs["all"] || []).join("\n");
+    } else if (key === "all") {
+      text = (nodeLogs["all"] && nodeLogs["all"].length > 0)
+        ? nodeLogs["all"].join("\n")
+        : Object.entries(nodeLogs)
+            .map(([nid, lines]) => {
+              const n = displayedGridNodes.find((x) => x.id === nid || x.name === nid);
+              return `=== NODE: ${n?.name || nid} ===\n` + lines.join("\n");
+            })
+            .join("\n\n");
     } else {
-      text = (nodeLogs[key] || []).join("\n");
+      text = (nodeLogs[key] || nodeLogs[displayedGridNodes.find((n) => n.id === key)?.name || ""] || []).join("\n");
     }
     navigator.clipboard.writeText(text);
     setCopiedLogNode(key);
@@ -884,9 +940,11 @@ export default function TrainingPage() {
 
   const clearLogs = () => {
     const cleared: Record<string, string[]> = {};
-    edgeNodes.forEach((node) => {
+    const ts = new Date().toLocaleTimeString();
+    cleared["all"] = [`[${ts}] [TERMINAL] Unified stream buffer cleared.`];
+    displayedGridNodes.forEach((node) => {
       cleared[node.id] = [
-        `[${new Date().toLocaleTimeString()}] [TERMINAL] Console buffer cleared. Ready for next training round.`,
+        `[${ts}] [TERMINAL] Console buffer cleared for ${node.name}. Ready for next training round.`,
       ];
     });
     setNodeLogs(cleared);
@@ -2003,14 +2061,14 @@ export default function TrainingPage() {
               </h2>
             </div>
             <p className="text-xs text-stone-400 font-mono">
-              Simultaneous execution streams for all participating edge nodes ({activeNodes.length} active devices).
+              Simultaneous execution streams for all participating edge nodes ({displayedGridNodes.length} active devices).
             </p>
           </div>
 
           {/* Action CTAs & View Tabs */}
           <div className="flex flex-wrap items-center gap-2 font-mono text-xs">
-            {/* Direct 1-Click Button to Focus on LOQ_Vinu */}
-            {edgeNodes.filter((n) => n.name.toLowerCase().includes("loq") || n.name.toLowerCase().includes("vinu")).map((loqNode) => (
+            {/* Direct 1-Click Button to Focus on LOQ_Vinu or external laptop */}
+            {displayedGridNodes.filter((n) => n.name.toLowerCase().includes("loq") || n.name.toLowerCase().includes("vinu")).map((loqNode) => (
               <button
                 key={loqNode.id}
                 onClick={() => {
@@ -2028,6 +2086,22 @@ export default function TrainingPage() {
               </button>
             ))}
 
+            {/* Consolidated All-in-One Live Feed */}
+            <button
+              onClick={() => {
+                setActiveLogTab("consolidated");
+                if (typeof window !== "undefined") localStorage.removeItem("fedzero_device_node");
+              }}
+              className={`px-3 py-1.5 rounded-lg border font-bold transition-all cursor-pointer flex items-center space-x-1.5 ${
+                activeLogTab === "consolidated"
+                  ? "bg-[#E05338] text-white border-[#E05338] shadow-md scale-102"
+                  : "bg-stone-900 border-stone-700 text-stone-400 hover:text-white"
+              }`}
+            >
+              <span className="w-2 h-2 rounded-full bg-red-400 animate-ping"></span>
+              <span>🔴 Live Unified Stream (All Devices)</span>
+            </button>
+
             <button
               onClick={() => {
                 setActiveLogTab("all");
@@ -2039,10 +2113,10 @@ export default function TrainingPage() {
                   : "bg-stone-900 border-stone-700 text-stone-400 hover:text-white"
               }`}
             >
-              🌐 All Nodes ({activeNodes.length} Devices)
+              🌐 Multi-Terminal Grid ({displayedGridNodes.length} Devices)
             </button>
 
-            {activeNodes.map((node) => (
+            {displayedGridNodes.map((node) => (
               <button
                 key={node.id}
                 onClick={() => {
@@ -2112,8 +2186,8 @@ export default function TrainingPage() {
         {/* LOGS DISPLAY CONTAINER: MULTI-TERMINAL SIDE-BY-SIDE GRID */}
         {activeLogTab === "all" ? (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-            {activeNodes.map((node) => {
-              const lines = nodeLogs[node.id] || [
+            {displayedGridNodes.map((node) => {
+              const lines = nodeLogs[node.id] || nodeLogs[node.name] || [
                 `[STANDBY] Enclave sandbox mounted for ${node.name}. Ready for training dispatch.`,
               ];
               return (
@@ -2152,6 +2226,39 @@ export default function TrainingPage() {
               );
             })}
           </div>
+        ) : activeLogTab === "consolidated" ? (
+          /* Consolidated All-in-One Real-Time Live Feed */
+          <div className="rounded-xl bg-[#09090B] border-2 border-red-900/60 flex flex-col h-[480px] overflow-hidden shadow-2xl">
+            <div className="px-4 py-3 bg-[#141417] border-b border-stone-800 flex items-center justify-between text-xs font-mono">
+              <div className="flex items-center space-x-2">
+                <span className="w-2.5 h-2.5 rounded-full bg-red-500 animate-pulse"></span>
+                <span className="font-bold text-white tracking-wide">
+                  🔴 Real-Time Consolidated Mesh Stream (Coordinator + All Edge Nodes)
+                </span>
+              </div>
+              <div className="flex items-center space-x-3 text-xs text-stone-400 font-mono">
+                <span className="text-emerald-400 font-bold">
+                  {(nodeLogs["all"] || []).length} Log Entries
+                </span>
+                <span className="text-stone-500 font-mono text-[10px]">
+                  WebSocket + HTTP Telemetry Ingest
+                </span>
+              </div>
+            </div>
+
+            <div
+              suppressHydrationWarning
+              className="flex-1 p-4 font-mono text-xs leading-relaxed text-stone-300 overflow-y-auto space-y-1 bg-black/40"
+            >
+              {(nodeLogs["all"] && nodeLogs["all"].length > 0
+                ? nodeLogs["all"]
+                : [
+                    "[MESH_TELEMETRY] Live Consolidated Stream initialized. Awaiting distributed events from edge hardware...",
+                  ]
+              ).map((l, i) => renderFormattedLogLine(l, i))}
+              <div ref={logsEndRef} />
+            </div>
+          </div>
         ) : (
           /* Single Node Full-Screen Terminal View */
           <div className="rounded-xl bg-[#09090B] border-2 border-stone-800 flex flex-col h-[460px] overflow-hidden shadow-2xl">
@@ -2159,14 +2266,14 @@ export default function TrainingPage() {
               <div className="flex items-center space-x-2">
                 <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse"></span>
                 <span className="font-bold text-white">
-                  {edgeNodes.find((n) => n.id === activeLogTab)?.name || "Edge Node"} Dedicated Console
+                  {displayedGridNodes.find((n) => n.id === activeLogTab)?.name || "Edge Node"} Dedicated Console
                 </span>
               </div>
               <div className="flex items-center space-x-3 text-xs text-stone-400 font-mono">
                 <span className="text-[#E5A638] font-bold">
-                  {edgeNodes.find((n) => n.id === activeLogTab)?.hardware_tier}
+                  {displayedGridNodes.find((n) => n.id === activeLogTab)?.hardware_tier}
                 </span>
-                <span>{edgeNodes.find((n) => n.id === activeLogTab)?.wallet_address}</span>
+                <span>{displayedGridNodes.find((n) => n.id === activeLogTab)?.wallet_address}</span>
               </div>
             </div>
 
@@ -2174,7 +2281,7 @@ export default function TrainingPage() {
               suppressHydrationWarning
               className="flex-1 p-4 font-mono text-xs leading-relaxed text-stone-300 overflow-y-auto space-y-1"
             >
-              {(nodeLogs[activeLogTab] || [
+              {(nodeLogs[activeLogTab] || nodeLogs[displayedGridNodes.find((n) => n.id === activeLogTab)?.name || ""] || [
                 `[STANDBY] Enclave sandbox mounted. Ready for training dispatch.`,
               ]).map((l, i) => renderFormattedLogLine(l, i))}
               <div ref={logsEndRef} />
