@@ -1,7 +1,23 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { UserCheck, ShieldCheck, Award, Zap, Coins, CheckCircle2, Lock, ExternalLink, Download, RefreshCw, KeyRound, Cpu } from "lucide-react";
+import Link from "next/link";
+import {
+  UserCheck,
+  ShieldCheck,
+  Award,
+  Zap,
+  Coins,
+  CheckCircle2,
+  Lock,
+  ExternalLink,
+  Download,
+  RefreshCw,
+  KeyRound,
+  Cpu,
+  Copy,
+  Check,
+} from "lucide-react";
 
 export default function PassportPage() {
   const [passport, setPassport] = useState<any>(null);
@@ -21,7 +37,8 @@ export default function PassportPage() {
       });
   }, []);
 
-  const walletAddr = passport?.contributor ?? "0x71C66336071ffd4e773E34dac3Ca0A6688211eef";
+  const walletAddr =
+    passport?.contributor ?? "0x71C66336071ffd4e773E34dac3Ca0A6688211eef";
 
   const handleCopy = () => {
     navigator.clipboard.writeText(walletAddr);
@@ -30,211 +47,241 @@ export default function PassportPage() {
   };
 
   return (
-    <div className="space-y-8 max-w-5xl mx-auto pb-16">
-      {/* Header */}
-      <div className="border-b-2 border-[#1C1917] pb-6">
-        <div className="inline-flex items-center space-x-2 px-3 py-1 bg-[#E05338]/10 border border-[#E05338] text-[#E05338] text-xs font-mono font-black uppercase tracking-wider mb-2">
-          <span>IDENTITY LAYER</span>
-          <span>•</span>
-          <span>ERC-5192 SOULBOUND</span>
+    <div className="space-y-6 sm:space-y-8 max-w-5xl mx-auto pb-16">
+      {/* ========================================================================= */}
+      {/* 1. CLEAN HEADER BANNER */}
+      {/* ========================================================================= */}
+      <div className="p-5 sm:p-7 rounded-2xl bg-[#F7F4EE] border-2 border-[#1C1917] retro-shadow flex flex-col md:flex-row md:items-center justify-between gap-5">
+        <div className="space-y-2 max-w-2xl">
+          <div className="flex items-center space-x-2">
+            <span className="inline-flex items-center space-x-1.5 px-2.5 py-0.5 rounded-full bg-[#FAF7F2] border border-[#1C1917]/20 text-[#E05338] text-[11px] font-mono font-bold">
+              <UserCheck className="w-3.5 h-3.5" />
+              <span>ERC-5192 IDENTITY LAYER</span>
+            </span>
+            <span className="text-xs font-mono text-[#78716C]">•</span>
+            <span className="text-xs font-mono font-bold text-emerald-700">
+              ● Non-Transferable Soulbound
+            </span>
+          </div>
+
+          <h1 className="text-2xl sm:text-3xl lg:text-4xl font-black text-[#1C1917] font-display tracking-tight uppercase">
+            AI Contributor Passport
+          </h1>
+
+          <p className="text-xs sm:text-sm text-[#57534E] font-medium leading-relaxed">
+            Cryptographic reputation credential anchored on <strong className="text-[#1C1917]">Arbitrum</strong>. Proves verified edge compute provenance and zkML gradient integrity without exposing private data.
+          </p>
         </div>
-        <h1 className="text-3xl font-black text-[#1C1917] tracking-tight flex items-center space-x-3">
-          <UserCheck className="w-8 h-8 text-[#E05338]" />
-          <span>AI Contributor Passport</span>
-        </h1>
-        <p className="text-sm font-medium text-[#1C1917]/70 mt-2 max-w-3xl leading-relaxed">
-          Soulbound cryptographic reputation credential anchored on Arbitrum. Represents verified edge compute provenance, federated gradient contributions, and zkML proof history without exposing patient or proprietary training datasets.
-        </p>
+
+        <div className="shrink-0 flex items-center gap-2">
+          <span className="px-3.5 py-2 rounded-xl bg-white border-2 border-[#1C1917] retro-shadow-sm font-mono text-xs font-black text-[#E5A638] uppercase">
+            {passport?.tier ?? "PLATINUM"} NODE
+          </span>
+        </div>
       </div>
 
-      {/* Physical-Style Verifiable Credential Card */}
-      <div className="bg-[#F7F4EE] border-2 border-[#1C1917] shadow-[6px_6px_0px_#1C1917] p-8 relative overflow-hidden space-y-8">
-        {/* Vintage Hologram Watermark */}
-        <div className="absolute -right-16 -top-16 w-64 h-64 bg-[#E5A638]/10 rounded-full border-4 border-dashed border-[#E5A638]/20 pointer-events-none flex items-center justify-center rotate-12">
-          <span className="font-mono text-[10px] font-black text-[#E5A638]/40 tracking-widest uppercase">
+      {/* ========================================================================= */}
+      {/* 2. SOULBOUND VERIFIABLE CREDENTIAL DECK */}
+      {/* ========================================================================= */}
+      <div className="bg-[#FAF7F2] border-2 border-[#1C1917] retro-shadow p-5 sm:p-7 md:p-8 rounded-2xl relative overflow-hidden space-y-6 sm:space-y-8">
+        {/* Hologram Watermark */}
+        <div className="absolute -right-12 -top-12 w-48 h-48 sm:w-60 sm:h-60 bg-[#E5A638]/10 rounded-full border-2 border-dashed border-[#E5A638]/25 pointer-events-none flex items-center justify-center rotate-12">
+          <span className="font-mono text-[9px] font-black text-[#E5A638]/40 tracking-widest uppercase text-center px-4">
             CRYPTOGRAPHIC PROVENANCE SEAL
           </span>
         </div>
 
-        {/* Passport Header */}
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 border-b-2 border-[#1C1917] pb-6">
-          <div className="flex items-center space-x-5">
-            <div className="w-20 h-20 bg-[#E05338] border-2 border-[#1C1917] shadow-[3px_3px_0px_#1C1917] flex items-center justify-center shrink-0">
-              <Award className="w-10 h-10 text-white" />
+        {/* Passport Profile Section */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-[#1C1917]/20 pb-6 relative z-10">
+          <div className="flex items-center space-x-4">
+            <div className="w-14 h-14 sm:w-16 sm:h-16 bg-[#E05338] border-2 border-[#1C1917] retro-shadow-sm rounded-xl flex items-center justify-center shrink-0 text-white">
+              <Award className="w-7 h-7 sm:w-8 sm:h-8" />
             </div>
-            <div>
-              <div className="flex items-center space-x-2">
-                <span className="text-[11px] font-mono font-black text-[#E05338] uppercase tracking-wider bg-[#E05338]/10 px-2 py-0.5 border border-[#E05338]">
-                  VERIFIED SOULBOUND IDENTITY
+
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-1.5">
+                <span className="text-[10px] font-mono font-bold text-[#E05338] uppercase bg-[#E05338]/10 px-2 py-0.5 rounded border border-[#E05338]/30">
+                  SOULBOUND PASSPORT
                 </span>
-                <span className="text-[11px] font-mono font-bold text-emerald-800 uppercase tracking-wider bg-emerald-100 px-2 py-0.5 border border-emerald-700">
-                  ACTIVE • NON-TRANSFERABLE
+                <span className="text-[10px] font-mono font-bold text-emerald-800 uppercase bg-emerald-100 px-2 py-0.5 rounded border border-emerald-600/30">
+                  ACTIVE
                 </span>
               </div>
-              <h2 className="text-2xl font-black text-[#1C1917] mt-1.5">
-                Hospital Alpha (Lead Contributor)
+
+              <h2 className="text-lg sm:text-xl md:text-2xl font-black text-[#1C1917] font-display mt-1 truncate">
+                {passport?.name ?? "Hospital Alpha (Lead Contributor)"}
               </h2>
-              <div className="text-xs font-mono text-[#1C1917]/70 mt-1 flex flex-wrap items-center gap-2">
-                <span className="font-bold text-[#1C1917]">DID / Wallet:</span>
+
+              <div className="text-xs font-mono text-[#78716C] mt-1 flex items-center space-x-1.5">
+                <span className="font-bold text-[#1C1917] shrink-0">DID:</span>
+                <span className="truncate max-w-[140px] sm:max-w-xs bg-white px-2 py-0.5 rounded border border-[#1C1917]/20 font-bold text-[#1C1917]">
+                  {walletAddr}
+                </span>
                 <button
+                  type="button"
                   onClick={handleCopy}
-                  className="bg-white px-2 py-0.5 border border-[#1C1917] text-[#1C1917] font-bold hover:bg-[#FAF7F2] transition-colors flex items-center space-x-1"
+                  className="text-[#E05338] hover:underline flex items-center space-x-0.5 shrink-0 cursor-pointer text-[11px] font-bold"
                 >
-                  <span>{walletAddr}</span>
-                  <span className="text-[10px] text-[#E05338] ml-1">{copied ? "COPIED!" : "COPY"}</span>
+                  {copied ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
+                  <span>{copied ? "COPIED" : "COPY"}</span>
                 </button>
               </div>
             </div>
           </div>
 
-          <div className="flex flex-col items-start md:items-end space-y-2">
-            <span className="px-4 py-2 bg-[#E5A638] text-[#1C1917] border-2 border-[#1C1917] shadow-[3px_3px_0px_#1C1917] font-mono font-black text-sm uppercase">
-              TIER: {passport?.tier ?? "PLATINUM"} NODE
-            </span>
-            <span className="text-[11px] font-mono text-[#1C1917]/60">
-              Anchor: Arbitrum Block #184,920,441
-            </span>
+          <div className="text-left sm:text-right font-mono text-xs text-[#78716C] shrink-0 pt-2 sm:pt-0 border-t sm:border-0 border-[#1C1917]/10">
+            <span className="font-bold block text-[#1C1917]">Arbitrum Anchor:</span>
+            <span className="text-[11px]">Block #184,920,441</span>
           </div>
         </div>
 
-        {/* Reputation Score & High-Impact Metrics */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          <div className="p-4 bg-white border-2 border-[#1C1917] shadow-[3px_3px_0px_#1C1917]">
-            <div className="text-xs font-mono font-bold text-[#1C1917]/60 uppercase flex items-center space-x-1.5">
-              <Zap className="w-4 h-4 text-[#E5A638]" />
+        {/* 4 Scorecard Metrics */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 font-mono">
+          {/* Reputation Score */}
+          <div className="p-4 bg-white rounded-xl border-2 border-[#1C1917] retro-shadow-sm space-y-2">
+            <div className="text-[10px] font-bold text-[#78716C] uppercase flex items-center space-x-1">
+              <Zap className="w-3.5 h-3.5 text-[#E5A638]" />
               <span>Reputation Score</span>
             </div>
-            <div className="text-3xl font-black font-mono text-[#1C1917] mt-2">
-              {passport?.reputation_score ?? 91} <span className="text-sm font-normal text-[#1C1917]/50">/ 100</span>
+            <div className="text-2xl sm:text-3xl font-black text-[#1C1917]">
+              {passport?.reputation_score ?? 91}
+              <span className="text-xs text-[#78716C] font-normal"> / 100</span>
             </div>
-            <div className="w-full bg-[#FAF7F2] border border-[#1C1917] h-3 mt-3 p-0.5">
+            <div className="w-full bg-[#FAF7F2] border border-[#1C1917]/30 h-2 rounded-full overflow-hidden">
               <div
-                className="bg-[#E05338] h-full"
+                className="bg-[#E05338] h-full transition-all duration-500"
                 style={{ width: `${passport?.reputation_score ?? 91}%` }}
-              ></div>
+              />
             </div>
-            <div className="text-[10px] font-mono text-[#1C1917]/50 mt-1 text-right">Top 2% Globally</div>
+            <div className="text-[10px] text-emerald-700 font-bold">Top 2% Globally</div>
           </div>
 
-          <div className="p-4 bg-white border-2 border-[#1C1917] shadow-[3px_3px_0px_#1C1917]">
-            <div className="text-xs font-mono font-bold text-[#1C1917]/60 uppercase flex items-center space-x-1.5">
-              <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-              <span>Verified Gradients</span>
+          {/* Verified Gradients */}
+          <div className="p-4 bg-white rounded-xl border-2 border-[#1C1917] retro-shadow-sm space-y-1">
+            <div className="text-[10px] font-bold text-[#78716C] uppercase flex items-center space-x-1">
+              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+              <span>Verified Proofs</span>
             </div>
-            <div className="text-3xl font-black font-mono text-emerald-700 mt-2">
+            <div className="text-2xl sm:text-3xl font-black text-emerald-700">
               {passport?.verified_contributions ?? 47}
             </div>
-            <div className="text-[11px] font-mono text-[#1C1917]/60 mt-3 pt-2 border-t border-[#1C1917]/20 flex justify-between">
-              <span>zkML Validation</span>
-              <span className="font-bold text-emerald-700">100% Pass</span>
+            <div className="text-[10px] text-[#78716C] pt-2 border-t border-[#1C1917]/10">
+              zkML 100% Pass Rate
             </div>
           </div>
 
-          <div className="p-4 bg-white border-2 border-[#1C1917] shadow-[3px_3px_0px_#1C1917]">
-            <div className="text-xs font-mono font-bold text-[#1C1917]/60 uppercase flex items-center space-x-1.5">
-              <ShieldCheck className="w-4 h-4 text-[#1C1917]" />
+          {/* Training Rounds */}
+          <div className="p-4 bg-white rounded-xl border-2 border-[#1C1917] retro-shadow-sm space-y-1">
+            <div className="text-[10px] font-bold text-[#78716C] uppercase flex items-center space-x-1">
+              <ShieldCheck className="w-3.5 h-3.5 text-[#1C1917]" />
               <span>Training Rounds</span>
             </div>
-            <div className="text-3xl font-black font-mono text-[#1C1917] mt-2">
+            <div className="text-2xl sm:text-3xl font-black text-[#1C1917]">
               {passport?.training_rounds ?? 25}
             </div>
-            <div className="text-[11px] font-mono text-[#1C1917]/60 mt-3 pt-2 border-t border-[#1C1917]/20 flex justify-between">
-              <span>Federated Cycles</span>
-              <span className="font-bold text-[#1C1917]">25 / 25 Sync</span>
+            <div className="text-[10px] text-[#78716C] pt-2 border-t border-[#1C1917]/10">
+              25 / 25 Rounds Synced
             </div>
           </div>
 
-          <div className="p-4 bg-white border-2 border-[#1C1917] shadow-[3px_3px_0px_#1C1917]">
-            <div className="text-xs font-mono font-bold text-[#1C1917]/60 uppercase flex items-center space-x-1.5">
-              <Coins className="w-4 h-4 text-[#E05338]" />
+          {/* Rewards Earned */}
+          <div className="p-4 bg-white rounded-xl border-2 border-[#1C1917] retro-shadow-sm space-y-1">
+            <div className="text-[10px] font-bold text-[#78716C] uppercase flex items-center space-x-1">
+              <Coins className="w-3.5 h-3.5 text-[#D97706]" />
               <span>Rewards Earned</span>
             </div>
-            <div className="text-3xl font-black font-mono text-[#E05338] mt-2">
-              {passport?.total_rewards_earned ? passport.total_rewards_earned.toFixed(1) : "128.5"} <span className="text-sm font-normal text-[#1C1917]/50">SOL</span>
+            <div className="text-2xl sm:text-3xl font-black text-emerald-700">
+              {passport?.total_rewards_earned
+                ? Number(passport.total_rewards_earned).toFixed(1)
+                : "128.5"}
+              <span className="text-xs text-[#78716C] font-normal"> SOL</span>
             </div>
-            <div className="text-[11px] font-mono text-[#1C1917]/60 mt-3 pt-2 border-t border-[#1C1917]/20 flex justify-between">
-              <span>Solana Escrow</span>
-              <span className="font-bold text-emerald-700">Settled</span>
+            <div className="text-[10px] text-[#78716C] pt-2 border-t border-[#1C1917]/10">
+              Solana Escrow Settled
             </div>
           </div>
         </div>
 
-        {/* Cryptographic Attestation Details Table */}
-        <div className="border-2 border-[#1C1917] bg-white">
-          <div className="px-4 py-2.5 bg-[#FAF7F2] border-b-2 border-[#1C1917] flex items-center justify-between">
-            <span className="text-xs font-mono font-black text-[#1C1917] uppercase tracking-wider flex items-center space-x-2">
-              <KeyRound className="w-4 h-4 text-[#E05338]" />
-              <span>SOULBOUND CRYPTOGRAPHIC SPECIFICATIONS</span>
+        {/* Cryptographic Attestation Specs Table */}
+        <div className="rounded-xl border-2 border-[#1C1917] bg-white overflow-hidden font-mono text-xs">
+          <div className="px-4 py-2.5 bg-[#F4EFE6] border-b border-[#1C1917]/20 flex items-center justify-between">
+            <span className="font-black text-[#1C1917] uppercase tracking-wider flex items-center space-x-2 text-[11px]">
+              <KeyRound className="w-3.5 h-3.5 text-[#E05338]" />
+              <span>Cryptographic Specifications</span>
             </span>
-            <span className="text-[11px] font-mono text-[#1C1917]/60">CONTRACT ARB-ONE #0x3A2F...4C81</span>
+            <span className="text-[10px] text-[#78716C] hidden sm:block">
+              Contract Arb-One #0x3A2F...4C81
+            </span>
           </div>
 
-          <div className="divide-y border-[#1C1917]/20 text-xs font-mono">
-            <div className="p-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-              <span className="text-[#1C1917]/70 font-bold">Token Standard</span>
-              <span className="text-[#1C1917] font-extrabold bg-[#FAF7F2] px-2 py-0.5 border border-[#1C1917]">
+          <div className="divide-y divide-[#1C1917]/15">
+            <div className="p-3 sm:px-4 flex flex-col sm:flex-row sm:items-center justify-between gap-1">
+              <span className="text-[#78716C] font-bold text-[11px]">Token Standard</span>
+              <span className="font-bold text-[#1C1917]">
                 EIP-5192 Minimal Non-Fungible Soulbound Interface
               </span>
             </div>
 
-            <div className="p-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-              <span className="text-[#1C1917]/70 font-bold">ZK Verification Protocol</span>
-              <span className="text-[#1C1917] font-extrabold">
-                Halo2 / Groth16 Bilinear Pairing Proofs (BN254 Curve)
+            <div className="p-3 sm:px-4 flex flex-col sm:flex-row sm:items-center justify-between gap-1">
+              <span className="text-[#78716C] font-bold text-[11px]">ZK Verification Protocol</span>
+              <span className="font-bold text-[#9333EA]">
+                Halo2 / Groth16 Bilinear Pairing (BN254 Curve)
               </span>
             </div>
 
-            <div className="p-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-              <span className="text-[#1C1917]/70 font-bold">Differential Privacy Guarantee</span>
-              <span className="text-emerald-700 font-extrabold bg-emerald-50 px-2 py-0.5 border border-emerald-600">
+            <div className="p-3 sm:px-4 flex flex-col sm:flex-row sm:items-center justify-between gap-1">
+              <span className="text-[#78716C] font-bold text-[11px]">Differential Privacy Guarantee</span>
+              <span className="font-bold text-emerald-800">
                 (ε = 1.20, δ = 10⁻⁵) Gaussian Noise Calibration
               </span>
             </div>
 
-            <div className="p-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-              <span className="text-[#1C1917]/70 font-bold">Hardware Attestation</span>
-              <span className="text-[#1C1917] font-extrabold flex items-center space-x-1.5">
+            <div className="p-3 sm:px-4 flex flex-col sm:flex-row sm:items-center justify-between gap-1">
+              <span className="text-[#78716C] font-bold text-[11px]">Hardware TEE Attestation</span>
+              <span className="font-bold text-[#1C1917] flex items-center space-x-1">
                 <Cpu className="w-3.5 h-3.5 text-[#E05338]" />
-                <span>Intel SGX & NVIDIA Confidential Computing TEE</span>
+                <span>Intel SGX &amp; NVIDIA Confidential TEE</span>
               </span>
             </div>
           </div>
         </div>
 
-        {/* Privacy Invariant Banner */}
-        <div className="p-4 bg-[#FAF7F2] border-2 border-[#1C1917] flex items-start space-x-3 text-xs text-[#1C1917] font-mono">
-          <Lock className="w-5 h-5 text-emerald-700 shrink-0 mt-0.5" />
-          <div className="leading-relaxed">
-            <strong className="text-emerald-800">ZERO DATA LEAKAGE INVARIANT:</strong> No patient electronic health records (EHR) or local training weights are ever transmitted to the network. The soulbound passport mathematically proves compute diligence and statistical validity without revealing private local shards.
+        {/* Privacy Guarantee Note */}
+        <div className="p-3.5 rounded-xl bg-[#FAF0E4] border border-[#1C1917]/20 flex items-start space-x-3 text-xs font-mono text-[#1C1917]">
+          <Lock className="w-4 h-4 text-emerald-700 shrink-0 mt-0.5" />
+          <div className="leading-relaxed text-[11px]">
+            <strong className="text-emerald-800 uppercase font-black">Zero Data Leakage Invariant:</strong> Raw patient records never leave the local node. The passport proves compute diligence and statistical validity without exposing private shards.
           </div>
         </div>
 
         {/* Action Buttons */}
-        <div className="flex flex-wrap items-center gap-3 pt-2">
+        <div className="flex flex-wrap items-center gap-2.5 pt-1 font-mono text-xs">
           <button
+            type="button"
             onClick={() => alert("Cryptographic credential bundle exported in JSON-LD format.")}
-            className="px-5 py-2.5 bg-[#1C1917] text-white font-mono font-black text-xs uppercase tracking-wider border-2 border-[#1C1917] shadow-[3px_3px_0px_#E05338] hover:bg-[#E05338] transition-colors flex items-center space-x-2"
+            className="px-4 py-2.5 bg-[#1C1917] hover:bg-[#E05338] text-white font-bold uppercase rounded-xl border-2 border-[#1C1917] retro-shadow-sm transition-all flex items-center space-x-2 cursor-pointer"
           >
-            <Download className="w-4 h-4" />
-            <span>EXPORT CREDENTIAL (.JSON-LD)</span>
+            <Download className="w-3.5 h-3.5" />
+            <span>Export Credential (.JSON-LD)</span>
           </button>
 
           <button
-            onClick={() => alert("Attestation verified on Arbitrum Goerli: Valid signature 0x8f2d...c34b")}
-            className="px-5 py-2.5 bg-white text-[#1C1917] font-mono font-bold text-xs uppercase tracking-wider border-2 border-[#1C1917] shadow-[3px_3px_0px_#1C1917] hover:bg-[#FAF7F2] transition-colors flex items-center space-x-2"
+            type="button"
+            onClick={() => alert("Attestation verified on Arbitrum: Signature valid.")}
+            className="px-4 py-2.5 bg-white hover:bg-[#FAF7F2] text-[#1C1917] font-bold uppercase rounded-xl border-2 border-[#1C1917] retro-shadow-sm transition-all flex items-center space-x-2 cursor-pointer"
           >
-            <RefreshCw className="w-4 h-4" />
-            <span>RE-VERIFY ATTESTATION</span>
+            <RefreshCw className="w-3.5 h-3.5" />
+            <span>Re-Verify Attestation</span>
           </button>
 
           <a
             href="https://arbiscan.io"
             target="_blank"
             rel="noreferrer"
-            className="px-5 py-2.5 bg-white text-[#1C1917] font-mono font-bold text-xs uppercase tracking-wider border-2 border-[#1C1917] shadow-[3px_3px_0px_#1C1917] hover:bg-[#FAF7F2] transition-colors flex items-center space-x-2"
+            className="px-4 py-2.5 bg-white hover:bg-[#FAF7F2] text-[#1C1917] font-bold uppercase rounded-xl border-2 border-[#1C1917] retro-shadow-sm transition-all flex items-center space-x-2"
           >
-            <span>VIEW ON ARBISCAN</span>
-            <ExternalLink className="w-3.5 h-3.5" />
+            <span>Arbiscan Explorer</span>
+            <ExternalLink className="w-3.5 h-3.5 text-[#78716C]" />
           </a>
         </div>
       </div>

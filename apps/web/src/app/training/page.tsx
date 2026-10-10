@@ -39,7 +39,8 @@ import {
   ChevronDown,
   ChevronUp,
   HardDrive,
-  Info
+  Info,
+  Shuffle
 } from "lucide-react";
 import LargeFileUploader, { UploadResult } from "@/components/LargeFileUploader";
 import PipelineStudio from "@/components/PipelineStudio";
@@ -54,6 +55,7 @@ const SYNTHETIC_DATASETS = [
     description: "Multivariate patient diagnostic records with clinical biomarkers for early pathology detection.",
     rowsCount: 480,
     target: "diagnostic_risk",
+    durationTag: "⚡ Fast Demo (15s) or 🔥 Deep Run",
     columns: [
       { name: "diagnostic_risk", type: "integer", unique: 2, encoding: "Binary Encoding", size: "3.8 KB", missing: "0 (0%)", range: "[0, 1] Binary", isTarget: true },
       { name: "age", type: "numeric", unique: 52, encoding: "Numeric (Standardized)", size: "3.8 KB", missing: "0 (0%)", range: "24 - 86 yrs", isTarget: false },
@@ -80,12 +82,75 @@ const SYNTHETIC_DATASETS = [
     ],
   },
   {
+    id: "genomics_deep",
+    name: "Genomic Multi-Omics Sequencing (Deep Cancer Profiling)",
+    category: "Clinical Oncology & Deep Genomics",
+    description: "High-throughput 32-biomarker somatic mutation profiling and next-generation RNA-seq expression telemetry. Heavy multi-parameter convergence across distributed medical enclaves.",
+    rowsCount: 48500,
+    target: "malignant_pathology",
+    durationTag: "🔥 7 - 10 Min Deep Run (48.5K Rows)",
+    columns: [
+      { name: "malignant_pathology", type: "integer", unique: 2, encoding: "Binary Encoding", size: "388 KB", missing: "0 (0%)", range: "[0: Benign, 1: Malignant]", isTarget: true },
+      { name: "brca1_expression", type: "numeric", unique: 3420, encoding: "Numeric (Standardized)", size: "388 KB", missing: "0 (0%)", range: "0.12 - 14.80 FPKM", isTarget: false },
+      { name: "tp53_mutation_depth", type: "numeric", unique: 4120, encoding: "Numeric (Standardized)", size: "388 KB", missing: "0 (0%)", range: "12x - 1,280x Coverage", isTarget: false },
+      { name: "kras_variant_freq", type: "numeric", unique: 2890, encoding: "MinMax Scaler", size: "388 KB", missing: "0 (0%)", range: "0.00 - 0.98 VAF", isTarget: false },
+      { name: "her2_amplification", type: "numeric", unique: 1850, encoding: "Numeric (Standardized)", size: "388 KB", missing: "0 (0%)", range: "0.8 - 18.5 Ratio", isTarget: false },
+      { name: "egfr_kinase_activity", type: "numeric", unique: 3100, encoding: "Numeric (Standardized)", size: "388 KB", missing: "0 (0%)", range: "14.2 - 184.6 pmol", isTarget: false },
+      { name: "tmb_mutation_burden", type: "numeric", unique: 940, encoding: "Numeric (Standardized)", size: "388 KB", missing: "0 (0%)", range: "1.2 - 68.4 mut/Mb", isTarget: false },
+      { name: "cd8_tcell_infiltration", type: "numeric", unique: 2150, encoding: "MinMax Scaler", size: "388 KB", missing: "0 (0%)", range: "2.4 - 48.0 %", isTarget: false },
+      { name: "pd_l1_expression", type: "numeric", unique: 1420, encoding: "Numeric (Standardized)", size: "388 KB", missing: "0 (0%)", range: "0 - 100 TPS Score", isTarget: false },
+      { name: "ki67_proliferation", type: "numeric", unique: 890, encoding: "Numeric (Standardized)", size: "388 KB", missing: "0 (0%)", range: "4.0 - 92.0 %", isTarget: false },
+      { name: "circulating_tumor_dna", type: "numeric", unique: 3800, encoding: "Numeric (Standardized)", size: "388 KB", missing: "0 (0%)", range: "0.02 - 18.40 ng/mL", isTarget: false },
+      { name: "apob_methylation_ratio", type: "numeric", unique: 1640, encoding: "MinMax Scaler", size: "388 KB", missing: "0 (0%)", range: "0.05 - 0.95 Beta", isTarget: false },
+      { name: "vegfa_angiogenesis", type: "numeric", unique: 2400, encoding: "Numeric (Standardized)", size: "388 KB", missing: "0 (0%)", range: "45 - 820 pg/mL", isTarget: false },
+      { name: "pten_deletion_loss", type: "boolean", unique: 2, encoding: "Binary Encoding", size: "388 KB", missing: "0 (0%)", range: "[0: Intact, 1: Homozygous Loss]", isTarget: false },
+      { name: "pik3ca_hotspot", type: "boolean", unique: 2, encoding: "Binary Encoding", size: "388 KB", missing: "0 (0%)", range: "[0: Wildtype, 1: Mutated]", isTarget: false },
+      { name: "msi_instability_score", type: "numeric", unique: 760, encoding: "MinMax Scaler", size: "388 KB", missing: "0 (0%)", range: "0.01 - 0.88 Index", isTarget: false },
+    ],
+    sampleRows: [
+      { brca1_expression: 8.42, tp53_mutation_depth: 340, kras_variant_freq: 0.42, her2_amplification: 4.8, malignant_pathology: 1 },
+      { brca1_expression: 1.15, tp53_mutation_depth: 24, kras_variant_freq: 0.01, her2_amplification: 1.0, malignant_pathology: 0 },
+      { brca1_expression: 12.30, tp53_mutation_depth: 880, kras_variant_freq: 0.68, her2_amplification: 9.2, malignant_pathology: 1 },
+      { brca1_expression: 1.80, tp53_mutation_depth: 42, kras_variant_freq: 0.02, her2_amplification: 1.1, malignant_pathology: 0 },
+    ],
+  },
+  {
+    id: "financial_hft",
+    name: "High-Frequency Order Book Microstructure (L2 Telemetry)",
+    category: "Fintech & L2 Market Depth",
+    description: "Sub-millisecond institutional order book depth, cross-exchange liquidity imbalances, and volatility spikes across 24 latency-sensitive signals.",
+    rowsCount: 64000,
+    target: "flash_crash_risk",
+    durationTag: "🔥 7 - 10 Min Deep Run (64.0K Rows)",
+    columns: [
+      { name: "flash_crash_risk", type: "integer", unique: 2, encoding: "Binary Encoding", size: "512 KB", missing: "0 (0%)", range: "[0: Stable, 1: Flash Crash Alert]", isTarget: true },
+      { name: "bid_ask_spread_bps", type: "numeric", unique: 4800, encoding: "Numeric (Standardized)", size: "512 KB", missing: "0 (0%)", range: "0.2 - 48.5 bps", isTarget: false },
+      { name: "order_flow_imbalance", type: "numeric", unique: 5200, encoding: "Numeric (Standardized)", size: "512 KB", missing: "0 (0%)", range: "[-0.95, +0.95] OFI", isTarget: false },
+      { name: "depth_ratio_l2", type: "numeric", unique: 3900, encoding: "MinMax Scaler", size: "512 KB", missing: "0 (0%)", range: "0.10 - 9.80 Ratio", isTarget: false },
+      { name: "weighted_mid_drift", type: "numeric", unique: 4400, encoding: "Numeric (Standardized)", size: "512 KB", missing: "0 (0%)", range: "[-24.2, +31.8] Delta", isTarget: false },
+      { name: "cancel_to_trade_ratio", type: "numeric", unique: 1800, encoding: "Numeric (Standardized)", size: "512 KB", missing: "0 (0%)", range: "1.2 - 140.0 C/T", isTarget: false },
+      { name: "trade_velocity_10ms", type: "numeric", unique: 2600, encoding: "Numeric (Standardized)", size: "512 KB", missing: "0 (0%)", range: "5 - 1,420 msgs/10ms", isTarget: false },
+      { name: "volatility_parkinson", type: "numeric", unique: 3100, encoding: "MinMax Scaler", size: "512 KB", missing: "0 (0%)", range: "0.002 - 0.184 Vol", isTarget: false },
+      { name: "whale_liquidity_delta", type: "numeric", unique: 4100, encoding: "Numeric (Standardized)", size: "512 KB", missing: "0 (0%)", range: "[-180K, +240K] USD", isTarget: false },
+      { name: "slippage_impact_bps", type: "numeric", unique: 2200, encoding: "Numeric (Standardized)", size: "512 KB", missing: "0 (0%)", range: "0.4 - 72.0 bps", isTarget: false },
+      { name: "maker_taker_divergence", type: "numeric", unique: 1900, encoding: "MinMax Scaler", size: "512 KB", missing: "0 (0%)", range: "[-0.8, +0.8]", isTarget: false },
+      { name: "cross_venue_arbitrage_bps", type: "numeric", unique: 1400, encoding: "Numeric (Standardized)", size: "512 KB", missing: "0 (0%)", range: "0.0 - 18.4 bps", isTarget: false },
+    ],
+    sampleRows: [
+      { bid_ask_spread_bps: 14.8, order_flow_imbalance: 0.82, cancel_to_trade_ratio: 84.5, slippage_impact_bps: 32.4, flash_crash_risk: 1 },
+      { bid_ask_spread_bps: 0.8, order_flow_imbalance: 0.04, cancel_to_trade_ratio: 4.2, slippage_impact_bps: 1.1, flash_crash_risk: 0 },
+      { bid_ask_spread_bps: 22.4, order_flow_imbalance: -0.91, cancel_to_trade_ratio: 112.0, slippage_impact_bps: 48.0, flash_crash_risk: 1 },
+      { bid_ask_spread_bps: 1.2, order_flow_imbalance: -0.05, cancel_to_trade_ratio: 5.8, slippage_impact_bps: 1.6, flash_crash_risk: 0 },
+    ],
+  },
+  {
     id: "fraud",
     name: "Financial Transaction Anomaly",
     category: "Fintech & Web3 Fraud",
     description: "Credit card telemetry, transaction velocity, risk scores, and geospatial signals for fraud detection.",
     rowsCount: 750,
     target: "is_fraud",
+    durationTag: "⚡ Fast Demo (15s) or 🔥 Deep Run",
     columns: [
       { name: "is_fraud", type: "integer", unique: 2, encoding: "Binary Encoding", size: "6.0 KB", missing: "0 (0%)", range: "[0: Legitimate, 1: Fraud]", isTarget: true },
       { name: "tx_amount_usd", type: "numeric", unique: 412, encoding: "Numeric (Standardized)", size: "6.0 KB", missing: "0 (0%)", range: "$1.50 - $4,850.00", isTarget: false },
@@ -112,6 +177,7 @@ const SYNTHETIC_DATASETS = [
     description: "Multi-sensor industrial telemetry monitoring rotor temperature, acoustic vibrations, and RPM deviations.",
     rowsCount: 600,
     target: "machine_failure",
+    durationTag: "⚡ Fast Demo (15s) or 🔥 Deep Run",
     columns: [
       { name: "machine_failure", type: "integer", unique: 2, encoding: "Binary Encoding", size: "4.8 KB", missing: "0 (0%)", range: "[0: Normal, 1: Failure]", isTarget: true },
       { name: "vibration_rms", type: "numeric", unique: 184, encoding: "Numeric (Standardized)", size: "4.8 KB", missing: "0 (0%)", range: "0.45 - 8.92 mm/s", isTarget: false },
@@ -136,6 +202,7 @@ const SYNTHETIC_DATASETS = [
     description: "16-dimensional PCA eigenprojections of handwritten digits for distributed privacy-preserving classification.",
     rowsCount: 900,
     target: "is_odd_digit",
+    durationTag: "⚡ Fast Demo (15s) or 🔥 Deep Run",
     columns: [
       { name: "is_odd_digit", type: "integer", unique: 2, encoding: "Binary Encoding", size: "7.2 KB", missing: "0 (0%)", range: "[0: Even, 1: Odd]", isTarget: true },
       { name: "pca_component_01", type: "numeric", unique: 480, encoding: "Numeric (Standardized)", size: "7.2 KB", missing: "0 (0%)", range: "[-4.2, +5.1]", isTarget: false },
@@ -168,14 +235,39 @@ interface EdgeNode {
   wallet_address: string;
   enabled: boolean;
   is_simulated?: boolean;
+  is_real_device?: boolean;
+}
+
+export interface RowRangeSlice {
+  id: string;
+  startRow: number;
+  endRow: number;
+  nodeId: string;
 }
 
 export default function TrainingPage() {
   // =========================================================================
-  // STEP 1: DATASET SELECTION STATE
+  // STEP 1: DATASET SELECTION STATE & TRAINING PROFILE
   // =========================================================================
   const [datasetMode, setDatasetMode] = useState<"synthetic" | "custom">("synthetic");
   const [selectedPresetId, setSelectedPresetId] = useState<string>("healthcare");
+  const [durationMode, setDurationMode] = useState<"fast" | "deep_10min">("fast");
+  const [targetMinutes, setTargetMinutes] = useState<number>(8); // 8 minutes default for deep mode
+  const [elapsedTrainingSeconds, setElapsedTrainingSeconds] = useState<number>(0);
+  const [remainingTrainingSeconds, setRemainingTrainingSeconds] = useState<number>(0);
+  const [trainingProgressPct, setTrainingProgressPct] = useState<number>(0);
+  const [currentPacingEpoch, setCurrentPacingEpoch] = useState<{
+    epoch: number;
+    total: number;
+    loss?: number;
+    accuracy?: number;
+    delta_norm?: number;
+  } | null>(null);
+
+  // Epochs & Learning Rate
+  const [epochs, setEpochs] = useState<number>(4);
+  const [learningRate, setLearningRate] = useState<number>(0.03);
+
   const [customCsvText, setCustomCsvText] = useState<string>(
     "age,systolic_bp,fasting_glucose,cholesterol_ldl,troponin_i,wbc_count,diagnostic_risk\n" +
     "58,142,118,165,0.04,7.2,1\n" +
@@ -257,6 +349,11 @@ export default function TrainingPage() {
       setSelectedTarget(p.target);
       const feats = p.columns.filter((c) => c.name !== p.target).map((c) => c.name);
       setSelectedFeatures(feats.slice(0, 8)); // select first 8 features by default
+      if (presetId === "genomics_deep" || presetId === "financial_hft") {
+        setDurationMode("deep_10min");
+        setEpochs(70);
+        setTargetMinutes(8);
+      }
     }
   };
 
@@ -345,7 +442,8 @@ export default function TrainingPage() {
   // =========================================================================
   // STEP 3: EDGE NODES STATE & CALIBRATION (EQUALLY SPLIT VS MANUAL)
   // =========================================================================
-  const [partitionMode, setPartitionMode] = useState<"equal" | "manual">("equal");
+  const [partitionMode, setPartitionMode] = useState<"equal" | "manual" | "ranges">("equal");
+  const [rowSlices, setRowSlices] = useState<RowRangeSlice[]>([]);
 
   // Dynamic total dataset row count (synthetic preset rows, large uploaded CSV rows, or custom CSV textarea rows)
   const totalDatasetRecords = useMemo(() => {
@@ -403,6 +501,27 @@ export default function TrainingPage() {
               const nKey = (d.device_name || "").toLowerCase();
               const existing = prevMap.get(wKey) || prevNameMap.get(nKey);
 
+              const nameLower = (d.device_name || "").toLowerCase();
+              const isVirtualCluster =
+                nameLower.includes("[simulated]") ||
+                nameLower.includes("hospital") ||
+                nameLower.includes("clinic") ||
+                nameLower.includes("research lab") ||
+                nameLower.includes("cluster") ||
+                nameLower.includes("sim_") ||
+                nameLower.includes("virtual");
+
+              const hasPhysicalTelemetry = Boolean(d.cpu_name) || Boolean(d.os_name);
+              const isLocallySaved =
+                typeof window !== "undefined" &&
+                localStorage.getItem("fedzero_device_node")?.toLowerCase() === nameLower;
+              const isPhysicalHardwarePattern =
+                /laptop|macbook|legion|loq|desktop|worker|native|rig|physical/i.test(nameLower);
+
+              const isRealPhysical =
+                !isVirtualCluster &&
+                (hasPhysicalTelemetry || isLocallySaved || isPhysicalHardwarePattern);
+
               return {
                 id: d.wallet_address || `node-${idx + 1}`,
                 name: d.device_name || `Edge Node ${idx + 1}`,
@@ -414,7 +533,8 @@ export default function TrainingPage() {
                 samples_count: existing?.samples ?? (d.samples_count || 120),
                 wallet_address: d.wallet_address || `0x...`,
                 enabled: existing ? existing.enabled : true,
-                is_simulated: (d.device_name || "").includes("[Simulated]"),
+                is_simulated: !isRealPhysical,
+                is_real_device: isRealPhysical,
               };
             });
           });
@@ -454,7 +574,8 @@ export default function TrainingPage() {
               samples_count: d.samples_count || 120,
               wallet_address: d.wallet_address || `0x...`,
               enabled: true,
-              is_simulated: (d.device_name || "").includes("[Simulated]"),
+              is_simulated: (d.device_name || "").includes("[Simulated]") || /hospital|clinic|cluster/i.test(d.device_name || ""),
+              is_real_device: !(d.device_name || "").includes("[Simulated]") && !/hospital|clinic|cluster/i.test(d.device_name || ""),
             }))
           );
         }
@@ -474,19 +595,25 @@ export default function TrainingPage() {
       const data = await provRes.json();
       if (Array.isArray(data)) {
         setEdgeNodes(
-          data.map((d, idx) => ({
-            id: d.wallet_address || `node-${idx + 1}`,
-            name: d.device_name || `Edge Node ${idx + 1}`,
-            hardware_tier: d.hardware_tier || "Auto-Detected",
-            vram_gb: d.declared_vram_gb ?? d.vram_gb ?? 6,
-            cpu_name: d.cpu_name,
-            os_name: d.os_name,
-            system_ram_gb: d.system_ram_gb,
-            samples_count: d.samples_count || 120,
-            wallet_address: d.wallet_address || `0x...`,
-            enabled: true,
-            is_simulated: (d.device_name || "").includes("[Simulated]"),
-          }))
+          data.map((d, idx) => {
+            const isReal =
+              !(d.device_name || "").includes("[Simulated]") &&
+              !/hospital|clinic|cluster|sim_/i.test(d.device_name || "");
+            return {
+              id: d.wallet_address || `node-${idx + 1}`,
+              name: d.device_name || `Edge Node ${idx + 1}`,
+              hardware_tier: d.hardware_tier || "Auto-Detected",
+              vram_gb: d.declared_vram_gb ?? d.vram_gb ?? 6,
+              cpu_name: d.cpu_name,
+              os_name: d.os_name,
+              system_ram_gb: d.system_ram_gb,
+              samples_count: d.samples_count || 120,
+              wallet_address: d.wallet_address || `0x...`,
+              enabled: true,
+              is_simulated: !isReal,
+              is_real_device: isReal,
+            };
+          })
         );
       }
     } catch (e) {
@@ -505,8 +632,14 @@ export default function TrainingPage() {
   const activeNodes = edgeNodes.filter((n) => n.enabled);
 
   const allocatedRows = useMemo(() => {
+    if (partitionMode === "ranges") {
+      return rowSlices.reduce(
+        (acc, s) => acc + Math.max(0, Number(s.endRow) - Number(s.startRow) + 1),
+        0
+      );
+    }
     return activeNodes.reduce((acc, n) => acc + (n.samples_count || 0), 0);
-  }, [activeNodes]);
+  }, [activeNodes, partitionMode, rowSlices]);
 
   const remainingRows = totalDatasetRecords - allocatedRows;
 
@@ -526,6 +659,182 @@ export default function TrainingPage() {
       );
     }
   }, [partitionMode, activeNodes.length, totalDatasetRecords]);
+
+  // Synchronize edgeNodes[].samples_count from rowSlices when in "ranges" mode
+  useEffect(() => {
+    if (partitionMode === "ranges") {
+      setEdgeNodes((prev) =>
+        prev.map((n) => {
+          if (!n.enabled) return { ...n, samples_count: 0 };
+          const slices = rowSlices.filter((s) => s.nodeId === n.id);
+          const total = slices.reduce(
+            (acc, s) => acc + Math.max(0, Number(s.endRow) - Number(s.startRow) + 1),
+            0
+          );
+          return { ...n, samples_count: total };
+        })
+      );
+    }
+  }, [partitionMode, rowSlices]);
+
+  // Node visual color palettes
+  const NODE_PALETTES = useMemo(
+    () => [
+      { name: "Emerald", bar: "#059669", bg: "bg-emerald-600", text: "text-emerald-800", bgLight: "bg-emerald-50", border: "border-emerald-600", badge: "bg-emerald-100 text-emerald-800 border-emerald-400" },
+      { name: "Blue", bar: "#2563EB", bg: "bg-blue-600", text: "text-blue-800", bgLight: "bg-blue-50", border: "border-blue-600", badge: "bg-blue-100 text-blue-800 border-blue-400" },
+      { name: "Amber", bar: "#D97706", bg: "bg-amber-600", text: "text-amber-800", bgLight: "bg-amber-50", border: "border-amber-600", badge: "bg-amber-100 text-amber-800 border-amber-400" },
+      { name: "Purple", bar: "#7C3AED", bg: "bg-purple-600", text: "text-purple-800", bgLight: "bg-purple-50", border: "border-purple-600", badge: "bg-purple-100 text-purple-800 border-purple-400" },
+      { name: "Rose", bar: "#E11D48", bg: "bg-rose-600", text: "text-rose-800", bgLight: "bg-rose-50", border: "border-rose-600", badge: "bg-rose-100 text-rose-800 border-rose-400" },
+      { name: "Teal", bar: "#0D9488", bg: "bg-teal-600", text: "text-teal-800", bgLight: "bg-teal-50", border: "border-teal-600", badge: "bg-teal-100 text-teal-800 border-teal-400" },
+    ],
+    []
+  );
+
+  const getNodePalette = (nodeId: string) => {
+    const idx = activeNodes.findIndex((n) => n.id === nodeId);
+    return NODE_PALETTES[(idx >= 0 ? idx : 0) % NODE_PALETTES.length];
+  };
+
+  // Helper to initialize or re-initialize range slices
+  const initializeDefaultSlices = (mode: "interleaved" | "contiguous" = "interleaved") => {
+    if (activeNodes.length === 0 || totalDatasetRecords <= 0) return;
+
+    if (mode === "interleaved" && activeNodes.length > 1) {
+      // Create interleaved slices (e.g. Node 1 -> Node 2 -> Node 1 -> Node 2...)
+      const numSegments = Math.min(6, Math.max(4, activeNodes.length * 2));
+      const segSize = Math.floor(totalDatasetRecords / numSegments);
+      const newSlices: RowRangeSlice[] = [];
+      let curStart = 1;
+
+      for (let i = 0; i < numSegments; i++) {
+        const assignedNode = activeNodes[i % activeNodes.length];
+        const isLast = i === numSegments - 1;
+        const curEnd = isLast ? totalDatasetRecords : curStart + segSize - 1;
+        newSlices.push({
+          id: `slice-${Date.now()}-${i}`,
+          startRow: curStart,
+          endRow: Math.max(curStart, curEnd),
+          nodeId: assignedNode.id,
+        });
+        curStart = curEnd + 1;
+      }
+      setRowSlices(newSlices);
+    } else {
+      // Contiguous 1-per-node split
+      const perNode = Math.floor(totalDatasetRecords / activeNodes.length);
+      const rem = totalDatasetRecords % activeNodes.length;
+      let cur = 1;
+      const newSlices: RowRangeSlice[] = [];
+      activeNodes.forEach((node, i) => {
+        const count = perNode + (i < rem ? 1 : 0);
+        const end = Math.min(totalDatasetRecords, cur + count - 1);
+        newSlices.push({
+          id: `slice-${Date.now()}-${i}`,
+          startRow: cur,
+          endRow: end,
+          nodeId: node.id,
+        });
+        cur = end + 1;
+      });
+      setRowSlices(newSlices);
+    }
+  };
+
+  const handleSwitchToRanges = () => {
+    setPartitionMode("ranges");
+    if (rowSlices.length === 0 && activeNodes.length > 0) {
+      initializeDefaultSlices("interleaved");
+    }
+  };
+
+  const handleAddSlice = (targetNodeId?: string) => {
+    const highestEnd = rowSlices.length > 0 ? Math.max(...rowSlices.map((s) => s.endRow)) : 0;
+    const startRow = highestEnd < totalDatasetRecords ? highestEnd + 1 : 1;
+    const defaultSpan = Math.max(10, Math.floor(totalDatasetRecords / (activeNodes.length * 2 || 2)));
+    const endRow = Math.min(totalDatasetRecords, startRow + defaultSpan - 1);
+    const chosenNodeId = targetNodeId || activeNodes[rowSlices.length % activeNodes.length]?.id || activeNodes[0]?.id || "";
+
+    setRowSlices((prev) => [
+      ...prev,
+      {
+        id: `slice-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
+        startRow,
+        endRow: Math.max(startRow, endRow),
+        nodeId: chosenNodeId,
+      },
+    ]);
+  };
+
+  const handleUpdateSlice = (sliceId: string, updates: Partial<RowRangeSlice>) => {
+    setRowSlices((prev) =>
+      prev.map((s) => (s.id === sliceId ? { ...s, ...updates } : s))
+    );
+  };
+
+  const handleRemoveSlice = (sliceId: string) => {
+    setRowSlices((prev) => prev.filter((s) => s.id !== sliceId));
+  };
+
+  const handleDuplicateSlice = (slice: RowRangeSlice) => {
+    const span = Math.max(1, slice.endRow - slice.startRow + 1);
+    const highestEnd = rowSlices.length > 0 ? Math.max(...rowSlices.map((s) => s.endRow)) : 0;
+    const startRow = highestEnd < totalDatasetRecords ? highestEnd + 1 : 1;
+    const endRow = Math.min(totalDatasetRecords, startRow + span - 1);
+
+    setRowSlices((prev) => [
+      ...prev,
+      {
+        id: `slice-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
+        startRow,
+        endRow: Math.max(startRow, endRow),
+        nodeId: slice.nodeId,
+      },
+    ]);
+  };
+
+  const handleAutoFillRemainingSlice = (targetNodeId?: string) => {
+    const highestEnd = rowSlices.length > 0 ? Math.max(...rowSlices.map((s) => s.endRow)) : 0;
+    if (highestEnd >= totalDatasetRecords) return;
+    const chosenNodeId = targetNodeId || activeNodes[0]?.id || "";
+    setRowSlices((prev) => [
+      ...prev,
+      {
+        id: `slice-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
+        startRow: highestEnd + 1,
+        endRow: totalDatasetRecords,
+        nodeId: chosenNodeId,
+      },
+    ]);
+  };
+
+  const rangeAnalysis = useMemo(() => {
+    if (partitionMode !== "ranges" || rowSlices.length === 0) {
+      return { hasOverlap: false, overlapRows: 0, coveredRows: allocatedRows, unassignedCount: Math.max(0, totalDatasetRecords - allocatedRows) };
+    }
+    const rowCounts: Record<number, number> = {};
+    rowSlices.forEach((s) => {
+      const start = Math.max(1, s.startRow);
+      const end = Math.min(totalDatasetRecords, s.endRow);
+      for (let r = start; r <= end; r++) {
+        rowCounts[r] = (rowCounts[r] || 0) + 1;
+      }
+    });
+
+    let overlapCount = 0;
+    let coveredCount = 0;
+    for (let r = 1; r <= totalDatasetRecords; r++) {
+      const c = rowCounts[r] || 0;
+      if (c > 1) overlapCount += (c - 1);
+      if (c >= 1) coveredCount++;
+    }
+
+    return {
+      hasOverlap: overlapCount > 0,
+      overlapRows: overlapCount,
+      coveredRows: coveredCount,
+      unassignedCount: Math.max(0, totalDatasetRecords - coveredCount),
+    };
+  }, [partitionMode, rowSlices, totalDatasetRecords, allocatedRows]);
 
   const toggleNodeEnabled = (id: string) => {
     setEdgeNodes((prev) =>
@@ -631,10 +940,6 @@ export default function TrainingPage() {
   // =========================================================================
   const [hiddenLayers, setHiddenLayers] = useState<number[]>([32, 16]);
   const [layerActivations, setLayerActivations] = useState<string[]>(["ReLU", "ReLU"]);
-  // Epochs: unlimited number, manually enterable
-  const [epochs, setEpochs] = useState<number>(4);
-  // Learning Rate: manually enterable decimal
-  const [learningRate, setLearningRate] = useState<number>(0.03);
 
   const addHiddenLayer = () => {
     const lastLayer = hiddenLayers.length > 0 ? hiddenLayers[hiddenLayers.length - 1] : 32;
@@ -679,6 +984,20 @@ export default function TrainingPage() {
   // STEP 5: TRAINING EXECUTION & REFINED MULTI-NODE LOGS TERMINAL
   // =========================================================================
   const [isTraining, setIsTraining] = useState<boolean>(false);
+
+  // Active training duration timer & countdown
+  useEffect(() => {
+    let timer: any = null;
+    if (isTraining) {
+      timer = setInterval(() => {
+        setElapsedTrainingSeconds((prev) => prev + 1);
+        setRemainingTrainingSeconds((prev) => Math.max(0, prev - 1));
+      }, 1000);
+    }
+    return () => {
+      if (timer) clearInterval(timer);
+    };
+  }, [isTraining]);
   const [activeStep, setActiveStep] = useState<number | null>(null);
   const [nodeLogs, setNodeLogs] = useState<Record<string, string[]>>({});
   const [activeLogTab, setActiveLogTab] = useState<string>("all"); // "all" | node.id
@@ -896,10 +1215,32 @@ export default function TrainingPage() {
                 next["all"] = [...(next["all"] || []), line];
                 return next;
               });
+            } else if (evtType === "ROUND_PACING_UPDATE") {
+              if (data?.elapsed_sec != null) setElapsedTrainingSeconds(Math.round(data.elapsed_sec));
+              if (data?.remaining_sec != null) setRemainingTrainingSeconds(Math.round(data.remaining_sec));
+              if (data?.progress_pct != null) setTrainingProgressPct(data.progress_pct);
+              if (data?.epoch != null && data?.total_epochs != null) {
+                setCurrentPacingEpoch((prev) => ({
+                  epoch: data.epoch,
+                  total: data.total_epochs,
+                  loss: prev?.loss,
+                  accuracy: prev?.accuracy,
+                  delta_norm: prev?.delta_norm,
+                }));
+              }
             } else if (evtType === "EPOCH_PROGRESS") {
+              if (data?.epoch != null) {
+                setCurrentPacingEpoch({
+                  epoch: data.epoch,
+                  total: data.total_epochs || epochs,
+                  loss: data.loss,
+                  accuracy: data.accuracy,
+                  delta_norm: data.delta_norm,
+                });
+              }
               const ts = new Date().toLocaleTimeString();
               const cName = data.client_name || data.client_id || "Worker";
-              const logLine = `[${ts}] [${cName}] [EPOCH_STREAM] Epoch ${data.epoch}/${data.total_epochs} | Batch Loss = ${data.loss} | Hardware SGD Telemetry`;
+              const logLine = `[${ts}] [${cName}] [EPOCH_STREAM] Epoch ${data.epoch}/${data.total_epochs} | Loss = ${data.loss} | Acc = ${data.accuracy ?? "--"}% | Hardware SGD Telemetry`;
               setNodeLogs((prev) => {
                 const next = { ...prev };
                 const cKey = cName.toLowerCase();
@@ -947,6 +1288,10 @@ export default function TrainingPage() {
               });
             } else if (evtType === "ROUND_COMPLETED") {
               setIsTraining(false);
+              setElapsedTrainingSeconds(0);
+              setRemainingTrainingSeconds(0);
+              setTrainingProgressPct(100);
+              setCurrentPacingEpoch(null);
               setLastRoundStats({
                 round: data.round_number,
                 accBefore: data.accuracy_before,
@@ -1083,23 +1428,38 @@ export default function TrainingPage() {
     setNodeLogs((prev) => {
       const next = { ...prev };
       activeNodes.forEach((node) => {
+        const nodeSlices = partitionMode === "ranges" ? rowSlices.filter((s) => s.nodeId === node.id) : [];
+        const sliceDesc =
+          nodeSlices.length > 0
+            ? ` | Ranges: ${nodeSlices.map((s) => `[${s.startRow}..${s.endRow}]`).join(", ")} (${node.samples_count} rows)`
+            : ` | Assigned: ${node.samples_count} rows`;
+
         next[node.id] = [
           ...(next[node.id] || []),
           `--------------------------------------------------------------------------------`,
           `[${ts()}] [DISPATCH] Federated Round triggered by Coordinator. Real-time WebSocket streaming active.`,
           `[${ts()}] [TOPOLOGY] Target Architecture: Input(${inputDim}) -> Dense[${hiddenLayers.join(", ")}] -> Output(${outputDim})`,
-          `[${ts()}] [DATA_CONFIG] Target: "${selectedTarget}" | Active Features: ${selectedFeatures.length} dims | Partition: ${partitionMode.toUpperCase()}`,
+          `[${ts()}] [DATA_CONFIG] Target: "${selectedTarget}" | Active Features: ${selectedFeatures.length} dims | Partition: ${partitionMode.toUpperCase()}${sliceDesc}`,
           `[${ts()}] [CLIENT_EXEC] Hardware enclave online: ${node.hardware_tier} (${node.vram_gb} GB VRAM). Commencing real local SGD (${epochs} Epochs, lr=${learningRate}).`,
         ];
       });
       return next;
     });
 
+    const targetSec = durationMode === "deep_10min" ? targetMinutes * 60 : 25;
+    setElapsedTrainingSeconds(0);
+    setRemainingTrainingSeconds(targetSec);
+    setTrainingProgressPct(0);
+
     const payload = {
       action: "START_ROUND",
       epochs,
       learning_rate: learningRate,
       active_node_ids: activeNodes.map((n) => n.wallet_address || n.name || n.id),
+      partition_mode: partitionMode,
+      row_slices: partitionMode === "ranges" ? rowSlices : undefined,
+      duration_mode: durationMode,
+      target_duration_sec: targetSec,
     };
 
     // If WebSocket is connected, send command directly over socket
@@ -1116,10 +1476,17 @@ export default function TrainingPage() {
           epochs,
           learning_rate: learningRate,
           active_node_ids: activeNodes.map((n) => n.wallet_address || n.name || n.id),
+          partition_mode: partitionMode,
+          row_slices: partitionMode === "ranges" ? rowSlices : undefined,
+          duration_mode: durationMode,
+          target_duration_sec: targetSec,
         }),
       });
       if (res.ok) {
         const data = await res.json();
+        if (data && data.status === "STARTED") {
+          return;
+        }
         if (data && data.round_id) {
           setLastRoundStats({
             round: data.round_id,
@@ -1131,13 +1498,26 @@ export default function TrainingPage() {
             arbitrumTx: data.arbitrum_tx?.substring(0, 18) || "0x...",
             solanaSig: data.solana_payouts?.[0]?.tx_signature?.substring(0, 18) || "SolanaConfirmed",
           });
+          setIsTraining(false);
+          setTimeout(() => setActiveStep(null), 5000);
         }
+      } else {
+        setIsTraining(false);
       }
     } catch (err) {
       console.error("HTTP round execution error", err);
-    } finally {
       setIsTraining(false);
-      setTimeout(() => setActiveStep(null), 5000);
+    }
+  };
+
+  const handleStopTraining = async () => {
+    try {
+      if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+        wsRef.current.send(JSON.stringify({ action: "STOP_ROUND" }));
+      }
+      await fetch("/api/training/stop-round", { method: "POST" });
+    } catch (err) {
+      console.error("Stop training round error", err);
     }
   };
 
@@ -1225,31 +1605,31 @@ export default function TrainingPage() {
   };
 
   return (
-    <div className="space-y-8 max-w-7xl mx-auto pb-20 select-none">
+    <div className="space-y-6 sm:space-y-8 max-w-7xl mx-auto pb-20 select-none">
       {/* Top Retro Hero Banner */}
-      <div className="p-8 rounded-2xl bg-[#F7F4EE] border-2 border-[#1C1917] retro-shadow flex flex-col lg:flex-row lg:items-center justify-between gap-6 relative overflow-hidden">
+      <div className="p-5 sm:p-7 md:p-8 rounded-2xl bg-[#F7F4EE] border-2 border-[#1C1917] retro-shadow flex flex-col lg:flex-row lg:items-center justify-between gap-5 sm:gap-6 relative overflow-hidden">
         <div className="space-y-2 z-10">
           <div className="inline-flex items-center space-x-2 px-3 py-1 rounded-md bg-[#FAF7F2] border-2 border-[#1C1917] text-[#E05338] text-xs font-mono font-black tracking-wider retro-shadow-sm">
             <Lock className="w-3.5 h-3.5 text-[#E05338]" />
             <span>CONFIDENTIAL FEDERATED LEARNING • STEP-BY-STEP STUDIO</span>
           </div>
-          <h1 className="text-3xl sm:text-4xl font-black text-[#1C1917] font-display tracking-tight">
+          <h1 className="text-2xl sm:text-3xl lg:text-4xl font-black text-[#1C1917] font-display tracking-tight uppercase">
             Federated Training Control Deck
           </h1>
-          <p className="text-sm text-[#57534E] max-w-2xl font-medium leading-relaxed">
+          <p className="text-xs sm:text-sm text-[#57534E] max-w-2xl font-medium leading-relaxed">
             Configure datasets, select custom features and labels in tabular format, calibrate edge device enclaves with equal or manual dataset splits, design neural hidden layers with unlimited epochs, and inspect live multi-node logs.
           </p>
         </div>
 
-        <div className="z-10 flex flex-wrap items-center gap-3 text-xs font-mono">
-          <div className="p-3 rounded-xl bg-[#FAF7F2] border-2 border-[#1C1917] retro-shadow-sm flex items-center space-x-2.5">
-            <span className={`w-2.5 h-2.5 rounded-full ${wsStatus === "connected" ? "bg-emerald-500 animate-pulse" : wsStatus === "connecting" ? "bg-amber-500 animate-ping" : "bg-red-500"}`}></span>
+        <div className="z-10 flex flex-wrap items-center gap-2.5 sm:gap-3 text-xs font-mono">
+          <div className="p-2.5 sm:p-3 rounded-xl bg-[#FAF7F2] border-2 border-[#1C1917] retro-shadow-sm flex items-center space-x-2">
+            <span className={`w-2 h-2 rounded-full ${wsStatus === "connected" ? "bg-emerald-500 animate-pulse" : wsStatus === "connecting" ? "bg-amber-500 animate-ping" : "bg-red-500"}`}></span>
             <span className="font-bold text-[#1C1917]">
               {wsStatus === "connected" ? "WebSocket Live" : wsStatus === "connecting" ? "WS Connecting..." : "WS Offline"}
             </span>
           </div>
-          <div className="p-3 rounded-xl bg-[#FAF7F2] border-2 border-[#1C1917] retro-shadow-sm flex items-center space-x-2.5">
-            <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
+          <div className="p-2.5 sm:p-3 rounded-xl bg-[#FAF7F2] border-2 border-[#1C1917] retro-shadow-sm flex items-center space-x-2">
+            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
             <span className="font-bold text-[#1C1917]">{activeNodes.length} Nodes Ready</span>
           </div>
         </div>
@@ -1258,7 +1638,7 @@ export default function TrainingPage() {
       {/* ========================================================================= */}
       {/* 1. DATASET SELECTION (SYNTHETIC VS CUSTOM UPLOAD/ENTER) */}
       {/* ========================================================================= */}
-      <section className="p-7 rounded-2xl bg-[#FAF7F2] border-2 border-[#1C1917] retro-shadow space-y-6">
+      <section className="p-5 sm:p-7 rounded-2xl bg-[#FAF7F2] border-2 border-[#1C1917] retro-shadow space-y-5 sm:space-y-6">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b-2 border-[#1C1917]/20 pb-4">
           <div className="space-y-1">
             <div className="flex items-center space-x-2.5">
@@ -1302,9 +1682,10 @@ export default function TrainingPage() {
         {/* Mode A: Synthetic Dataset Presets */}
         {datasetMode === "synthetic" ? (
           <div className="space-y-5">
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {SYNTHETIC_DATASETS.map((preset) => {
                 const isSelected = selectedPresetId === preset.id;
+                const isDeepRun = (preset as any).durationTag?.includes("7 - 10 Min");
                 return (
                   <div
                     key={preset.id}
@@ -1334,9 +1715,25 @@ export default function TrainingPage() {
                       </p>
                     </div>
 
-                    <div className="pt-3 border-t border-[#1C1917]/15 flex items-center justify-between text-[11px] font-mono text-[#78716C]">
-                      <span className="px-2 py-0.5 rounded bg-[#1C1917] text-white font-bold text-[10px]">{preset.rowsCount} Total Rows</span>
-                      <span>Target: <strong className="text-[#1C1917]">{preset.target}</strong></span>
+                    <div className="pt-3 border-t border-[#1C1917]/15 flex flex-col gap-2 text-[11px] font-mono text-[#78716C]">
+                      <div className="flex items-center justify-between">
+                        <span className="px-2 py-0.5 rounded bg-[#1C1917] text-white font-bold text-[10px]">
+                          {preset.rowsCount.toLocaleString()} Total Rows
+                        </span>
+                        <span>Target: <strong className="text-[#1C1917]">{preset.target}</strong></span>
+                      </div>
+                      {(preset as any).durationTag && (
+                        <div
+                          className={`text-[10px] font-mono font-bold px-2 py-1 rounded border flex items-center justify-between ${
+                            isDeepRun
+                              ? "bg-amber-500/15 text-amber-900 border-amber-600/30"
+                              : "bg-emerald-500/10 text-emerald-800 border-emerald-600/25"
+                          }`}
+                        >
+                          <span>{(preset as any).durationTag}</span>
+                          {isDeepRun && <span className="text-[9px] uppercase px-1 rounded bg-amber-600 text-white font-black">7-10m</span>}
+                        </div>
+                      )}
                     </div>
                   </div>
                 );
@@ -1372,7 +1769,7 @@ export default function TrainingPage() {
       {/* ========================================================================= */}
       {/* 2. FEATURES & TARGET SELECTION IN RICH TABULAR FORMAT */}
       {/* ========================================================================= */}
-      <section className="p-7 rounded-2xl bg-[#FAF7F2] border-2 border-[#1C1917] retro-shadow space-y-6">
+      <section className="p-5 sm:p-7 rounded-2xl bg-[#FAF7F2] border-2 border-[#1C1917] retro-shadow space-y-5 sm:space-y-6">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b-2 border-[#1C1917]/20 pb-4">
           <div className="space-y-1">
             <div className="flex items-center space-x-2.5">
@@ -1581,7 +1978,7 @@ export default function TrainingPage() {
       {/* ========================================================================= */}
       {/* 3. PARTICIPATING EDGE DEVICES & DATASET SPLIT (EQUALLY SPLIT VS MANUAL) */}
       {/* ========================================================================= */}
-      <section className="p-7 rounded-2xl bg-[#FAF7F2] border-2 border-[#1C1917] retro-shadow space-y-6">
+      <section className="p-5 sm:p-7 rounded-2xl bg-[#FAF7F2] border-2 border-[#1C1917] retro-shadow space-y-5 sm:space-y-6">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b-2 border-[#1C1917]/20 pb-4">
           <div className="space-y-1">
             <div className="flex items-center space-x-2.5">
@@ -1597,9 +1994,10 @@ export default function TrainingPage() {
             </p>
           </div>
 
-          {/* Dataset Split Mode Toggle: Equally Split vs Manual */}
-          <div className="flex items-center space-x-2 bg-[#F2ECE1] p-1.5 rounded-xl border-2 border-[#1C1917]">
+          {/* Dataset Split Mode Toggle: Equally Split vs Manual vs Range Slices */}
+          <div className="flex flex-wrap items-center gap-1.5 bg-[#F2ECE1] p-1.5 rounded-xl border-2 border-[#1C1917]">
             <button
+              type="button"
               onClick={() => setPartitionMode("equal")}
               className={`px-3 py-1.5 rounded-lg text-xs font-mono font-bold transition-all flex items-center space-x-1.5 ${
                 partitionMode === "equal"
@@ -1608,9 +2006,10 @@ export default function TrainingPage() {
               }`}
             >
               <Split className="w-3.5 h-3.5" />
-              <span>Equally Split Dataset</span>
+              <span>Equally Split</span>
             </button>
             <button
+              type="button"
               onClick={() => setPartitionMode("manual")}
               className={`px-3 py-1.5 rounded-lg text-xs font-mono font-bold transition-all flex items-center space-x-1.5 ${
                 partitionMode === "manual"
@@ -1619,7 +2018,19 @@ export default function TrainingPage() {
               }`}
             >
               <Sliders className="w-3.5 h-3.5" />
-              <span>Manual Allocation</span>
+              <span>Manual Count</span>
+            </button>
+            <button
+              type="button"
+              onClick={handleSwitchToRanges}
+              className={`px-3 py-1.5 rounded-lg text-xs font-mono font-bold transition-all flex items-center space-x-1.5 ${
+                partitionMode === "ranges"
+                  ? "bg-[#E05338] text-white retro-shadow-sm"
+                  : "text-[#57534E] hover:text-[#1C1917]"
+              }`}
+            >
+              <Shuffle className="w-3.5 h-3.5" />
+              <span>🎯 Row Range / Slices</span>
             </button>
           </div>
         </div>
@@ -1728,6 +2139,15 @@ export default function TrainingPage() {
                 + Auto-Fill Remaining (+{remainingRows.toLocaleString()} rows)
               </button>
             )}
+            {partitionMode === "ranges" && remainingRows > 0 && (
+              <button
+                type="button"
+                onClick={() => handleAutoFillRemainingSlice()}
+                className="mt-2 px-2.5 py-1 text-[10px] font-bold bg-emerald-100 hover:bg-emerald-200 text-emerald-900 border border-emerald-700 rounded transition-all text-center"
+              >
+                + Auto-Fill Remaining Slices (+{remainingRows.toLocaleString()} rows)
+              </button>
+            )}
           </div>
         </div>
 
@@ -1735,7 +2155,7 @@ export default function TrainingPage() {
         <div className="flex flex-wrap items-center justify-between gap-3 text-xs font-mono">
           <div className="flex flex-wrap items-center gap-2">
             <span className="font-bold text-[#1C1917] bg-[#FAF7F2] px-2.5 py-1 rounded-md border border-[#1C1917]/30">
-              Strategy: {partitionMode === "equal" ? "⚖️ Equal Row Distribution" : "🛠️ Manual Row Input Mode"}
+              Strategy: {partitionMode === "equal" ? "⚖️ Equal Row Distribution" : partitionMode === "ranges" ? "🎯 Multi-Range / Slices Allocation Matrix" : "🛠️ Manual Row Input Mode"}
             </span>
             <span className="text-[#78716C]">
               ({activeNodes.length} active edge participants)
@@ -1792,6 +2212,271 @@ export default function TrainingPage() {
             </button>
           </div>
         </div>
+
+        {/* ROW RANGE ALLOCATION MATRIX PANEL (When partitionMode === "ranges") */}
+        {edgeNodes.length > 0 && partitionMode === "ranges" && (
+          <div className="p-5 rounded-2xl bg-[#FAF7F2] border-2 border-[#1C1917] retro-shadow space-y-4 font-mono">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b-2 border-[#1C1917]/20 pb-3">
+              <div>
+                <div className="flex items-center space-x-2">
+                  <span className="w-3 h-3 rounded-full bg-[#E05338]" />
+                  <h4 className="font-black text-sm text-[#1C1917] uppercase tracking-wide">
+                    Row Range &amp; Slices Allocation Matrix
+                  </h4>
+                  <span className="px-2 py-0.5 rounded bg-[#1C1917] text-white text-[10px] font-bold">
+                    {rowSlices.length} Slices Active
+                  </span>
+                </div>
+                <p className="text-xs text-[#78716C] mt-1">
+                  Assign contiguous or interleaved row slices from the dataset across nodes. Multiple non-contiguous segments can be routed to the same machine (e.g. Node 1 ➔ Node 2 ➔ Node 1).
+                </p>
+              </div>
+
+              {/* Quick Actions Toolbar */}
+              <div className="flex flex-wrap items-center gap-2 shrink-0">
+                <button
+                  type="button"
+                  onClick={() => handleAddSlice()}
+                  className="px-3 py-1.5 bg-[#E05338] text-white hover:bg-[#c9422a] rounded-lg text-xs font-mono font-bold flex items-center space-x-1.5 retro-shadow-sm transition-all"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>+ Add Range Segment</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => initializeDefaultSlices("interleaved")}
+                  className="px-2.5 py-1.5 bg-white border-2 border-[#1C1917] hover:bg-[#F2ECE1] rounded-lg text-xs font-mono font-bold text-[#1C1917] flex items-center space-x-1.5 retro-shadow-sm transition-all"
+                  title="Alternate dataset segments across active nodes (e.g. Node 1 -> Node 2 -> Node 1 -> Node 2)"
+                >
+                  <Shuffle className="w-3.5 h-3.5 text-[#2563EB]" />
+                  <span>🔀 Interleave (A ➔ B ➔ A)</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => initializeDefaultSlices("contiguous")}
+                  className="px-2.5 py-1.5 bg-white border-2 border-[#1C1917] hover:bg-[#F2ECE1] rounded-lg text-xs font-mono font-bold text-[#1C1917] flex items-center space-x-1.5 retro-shadow-sm transition-all"
+                  title="Evenly distribute contiguous blocks (1 range per node)"
+                >
+                  <Split className="w-3.5 h-3.5 text-emerald-600" />
+                  <span>⚖️ Contiguous Split</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Visual Dataset Coverage Timeline Bar */}
+            <div className="space-y-1.5 bg-white p-3.5 rounded-xl border-2 border-[#1C1917] shadow-[2px_2px_0px_#1C1917]">
+              <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
+                <span className="font-bold text-[#1C1917] flex items-center space-x-1.5">
+                  <span>Dataset Row Coverage Timeline:</span>
+                  <span className="text-[#78716C] font-normal">
+                    [Row 1 → Row {totalDatasetRecords.toLocaleString()}]
+                  </span>
+                </span>
+                <span className="text-[11px] font-bold">
+                  {rangeAnalysis.unassignedCount === 0 && !rangeAnalysis.hasOverlap ? (
+                    <span className="text-emerald-700 flex items-center space-x-1">
+                      <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 inline" />
+                      <span>Full 100% Coverage (0 Gaps, 0 Overlaps)</span>
+                    </span>
+                  ) : rangeAnalysis.hasOverlap ? (
+                    <span className="text-amber-700 font-bold">
+                      ⚠️ {rangeAnalysis.overlapRows.toLocaleString()} Overlapping Row Allocations
+                    </span>
+                  ) : (
+                    <span className="text-[#B45309]">
+                      ⚠️ {rangeAnalysis.unassignedCount.toLocaleString()} Rows Unassigned
+                    </span>
+                  )}
+                </span>
+              </div>
+
+              {/* Segmented Timeline */}
+              <div className="w-full h-8 bg-[#E7E2D8] rounded-lg border-2 border-[#1C1917] flex overflow-hidden p-0.5 shadow-inner">
+                {rowSlices.length === 0 ? (
+                  <div className="w-full h-full flex items-center justify-center text-xs text-[#78716C]">
+                    No range segments defined yet. Click &quot;+ Add Range Segment&quot; above.
+                  </div>
+                ) : (
+                  rowSlices.map((slice, idx) => {
+                    const span = Math.max(0, slice.endRow - slice.startRow + 1);
+                    const pct = Math.max(1, (span / Math.max(1, totalDatasetRecords)) * 100);
+                    const node = edgeNodes.find((n) => n.id === slice.nodeId);
+                    const palette = getNodePalette(slice.nodeId);
+                    return (
+                      <div
+                        key={slice.id}
+                        style={{ width: `${pct}%`, backgroundColor: palette.bar }}
+                        className="h-full border-r border-[#1C1917]/30 last:border-r-0 relative group flex items-center justify-center overflow-hidden transition-all hover:brightness-110 cursor-pointer"
+                        title={`Segment #${idx + 1}: ${node?.name || "Node"} (Rows ${slice.startRow} - ${slice.endRow}, ${span} rows)`}
+                      >
+                        <span className="text-[10px] font-mono font-black text-white px-1 truncate select-none drop-shadow-sm">
+                          {span > totalDatasetRecords * 0.08
+                            ? `${node?.name || "Node"}: ${slice.startRow}–${slice.endRow}`
+                            : `${slice.startRow}–${slice.endRow}`}
+                        </span>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+            </div>
+
+            {/* Interactive Slices Table */}
+            <div className="overflow-x-auto border-2 border-[#1C1917] rounded-xl bg-white shadow-[2px_2px_0px_#1C1917]">
+              <table className="w-full text-left font-mono text-xs border-collapse">
+                <thead>
+                  <tr className="bg-[#F2ECE1] border-b-2 border-[#1C1917] text-[#1C1917]">
+                    <th className="py-2.5 px-3 font-bold w-12 text-center">#</th>
+                    <th className="py-2.5 px-3 font-bold min-w-[220px]">Target Edge Node</th>
+                    <th className="py-2.5 px-3 font-bold w-40">From Row (Start)</th>
+                    <th className="py-2.5 px-3 font-bold w-40">To Row (End)</th>
+                    <th className="py-2.5 px-3 font-bold w-44">Segment Size</th>
+                    <th className="py-2.5 px-3 font-bold w-24 text-center">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-[#1C1917]/15">
+                  {rowSlices.length === 0 ? (
+                    <tr>
+                      <td colSpan={6} className="py-6 text-center text-[#78716C] italic">
+                        No row range slices defined yet. Click &quot;+ Add Range Segment&quot; or &quot;🔀 Interleave&quot; to auto-generate segments.
+                      </td>
+                    </tr>
+                  ) : (
+                    rowSlices.map((slice, idx) => {
+                      const sliceRows = Math.max(0, slice.endRow - slice.startRow + 1);
+                      const palette = getNodePalette(slice.nodeId);
+
+                      return (
+                        <tr key={slice.id} className="hover:bg-[#FAF7F2] transition-colors">
+                          <td className="py-2.5 px-3 text-center font-bold text-[#78716C]">
+                            {idx + 1}
+                          </td>
+                          <td className="py-2.5 px-3">
+                            <div className="flex items-center space-x-2">
+                              <span
+                                className="w-3 h-3 rounded-full shrink-0 border border-[#1C1917]/40"
+                                style={{ backgroundColor: palette.bar }}
+                              />
+                              <select
+                                value={slice.nodeId}
+                                onChange={(e) =>
+                                  handleUpdateSlice(slice.id, { nodeId: e.target.value })
+                                }
+                                className="w-full py-1 px-2 text-xs font-bold font-mono bg-white border border-[#1C1917] rounded shadow-sm focus:outline-none focus:ring-2 focus:ring-[#E05338]"
+                              >
+                                {edgeNodes.map((n) => (
+                                  <option key={n.id} value={n.id} disabled={!n.enabled}>
+                                    {n.name} {n.enabled ? `(${n.hardware_tier})` : "(Disabled)"}
+                                  </option>
+                                ))}
+                              </select>
+                            </div>
+                          </td>
+                          <td className="py-2.5 px-3">
+                            <div className="flex items-center space-x-1.5">
+                              <span className="text-[11px] text-[#78716C] font-bold">Row</span>
+                              <input
+                                type="number"
+                                min="1"
+                                max={totalDatasetRecords}
+                                value={slice.startRow}
+                                onChange={(e) =>
+                                  handleUpdateSlice(slice.id, {
+                                    startRow: Math.max(1, parseInt(e.target.value) || 1),
+                                  })
+                                }
+                                className="w-24 py-1 px-2 font-black font-mono bg-white border border-[#1C1917] rounded text-center shadow-inner focus:outline-none focus:ring-1 focus:ring-[#E05338]"
+                              />
+                            </div>
+                          </td>
+                          <td className="py-2.5 px-3">
+                            <div className="flex items-center space-x-1.5">
+                              <span className="text-[11px] text-[#78716C] font-bold">Row</span>
+                              <input
+                                type="number"
+                                min="1"
+                                max={totalDatasetRecords}
+                                value={slice.endRow}
+                                onChange={(e) =>
+                                  handleUpdateSlice(slice.id, {
+                                    endRow: Math.max(1, parseInt(e.target.value) || 1),
+                                  })
+                                }
+                                className="w-24 py-1 px-2 font-black font-mono bg-white border border-[#1C1917] rounded text-center shadow-inner focus:outline-none focus:ring-1 focus:ring-[#E05338]"
+                              />
+                            </div>
+                          </td>
+                          <td className="py-2.5 px-3">
+                            <span
+                              className={`inline-flex items-center px-2 py-0.5 rounded text-[11px] font-bold border ${palette.badge}`}
+                            >
+                              {sliceRows.toLocaleString()} rows (
+                              {((sliceRows / Math.max(1, totalDatasetRecords)) * 100).toFixed(0)}%)
+                            </span>
+                          </td>
+                          <td className="py-2.5 px-3 text-center">
+                            <div className="flex items-center justify-center space-x-1">
+                              <button
+                                type="button"
+                                onClick={() => handleDuplicateSlice(slice)}
+                                title="Duplicate segment for this node"
+                                className="p-1.5 hover:bg-[#F2ECE1] rounded text-[#78716C] hover:text-[#1C1917] transition-colors"
+                              >
+                                <Copy className="w-3.5 h-3.5" />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleRemoveSlice(slice.id)}
+                                title="Remove this range slice"
+                                className="p-1.5 hover:bg-red-50 rounded text-red-500 hover:text-red-700 transition-colors"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })
+                  )}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Bottom Slices Status Bar */}
+            <div className="flex flex-wrap items-center justify-between gap-3 text-xs pt-1">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="font-bold text-[#1C1917]">Node Allocation Summary:</span>
+                {activeNodes.map((n) => {
+                  const nodeSlices = rowSlices.filter((s) => s.nodeId === n.id);
+                  const palette = getNodePalette(n.id);
+                  return (
+                    <span
+                      key={n.id}
+                      className={`inline-flex items-center space-x-1 px-2.5 py-1 rounded-full border text-[11px] font-bold ${palette.badge}`}
+                    >
+                      <span>{n.name}:</span>
+                      <span>{n.samples_count.toLocaleString()} rows</span>
+                      <span className="text-[10px] opacity-75 font-normal">
+                        ({nodeSlices.length} slices)
+                      </span>
+                    </span>
+                  );
+                })}
+              </div>
+
+              {remainingRows > 0 && (
+                <button
+                  type="button"
+                  onClick={() => handleAutoFillRemainingSlice()}
+                  className="px-2.5 py-1 bg-emerald-100 hover:bg-emerald-200 text-emerald-900 border border-emerald-700 rounded text-xs font-bold flex items-center space-x-1"
+                >
+                  <Zap className="w-3 h-3 text-emerald-700" />
+                  <span>+ Auto-Fill Remaining (+{remainingRows.toLocaleString()} rows)</span>
+                </button>
+              )}
+            </div>
+          </div>
+        )}
 
         {/* Empty State vs Nodes Grid */}
         {edgeNodes.length === 0 ? (
@@ -1895,9 +2580,16 @@ export default function TrainingPage() {
                         <Cpu className="w-3.5 h-3.5 text-[#E05338]" />
                         <span className="text-[10px] uppercase font-black text-[#1C1917]">Hardware:</span>
                       </div>
-                      <span className={`text-[9px] font-black px-2 py-0.5 rounded-full border shadow-xs ${node.is_simulated || node.name.includes('[Simulated]') ? 'bg-amber-100 text-amber-900 border-amber-300' : 'bg-emerald-100 text-emerald-900 border-emerald-400'}`}>
-                        {node.is_simulated || node.name.includes('[Simulated]') ? "⚡ SIMULATED" : "🟢 REAL DEVICE"}
-                      </span>
+                      {node.is_real_device ? (
+                        <span className="text-[9px] font-black px-2 py-0.5 rounded-full border bg-emerald-100 text-emerald-900 border-emerald-500 flex items-center space-x-1 shadow-xs shrink-0">
+                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-600 animate-pulse"></span>
+                          <span>🟢 REAL PHYSICAL DEVICE</span>
+                        </span>
+                      ) : (
+                        <span className="text-[9px] font-black px-2 py-0.5 rounded-full border bg-amber-100 text-amber-900 border-amber-300 flex items-center space-x-1 shadow-xs shrink-0">
+                          <span>⚡ VIRTUAL ENCLAVE</span>
+                        </span>
+                      )}
                     </div>
 
                     {/* Actual GPU Accelerator Full Name - NO TRUNCATION */}
@@ -1968,7 +2660,7 @@ export default function TrainingPage() {
                     )}
                   </div>
 
-                  {/* ROW ALLOCATION CONTROLS: EQUAL VS MANUAL INPUT */}
+                  {/* ROW ALLOCATION CONTROLS: EQUAL VS MANUAL VS RANGES */}
                   {partitionMode === "equal" ? (
                     <div className="p-3 bg-[#F4EFE6] rounded-lg border border-[#1C1917]/25 space-y-1">
                       <div className="flex items-center justify-between text-[11px]">
@@ -1979,6 +2671,65 @@ export default function TrainingPage() {
                       </div>
                       <div className="text-[10px] text-[#78716C]">
                         Auto-split across {activeNodes.length} active edge devices
+                      </div>
+                    </div>
+                  ) : partitionMode === "ranges" ? (
+                    <div className="p-3 bg-white rounded-lg border-2 border-[#1C1917] shadow-[2px_2px_0px_#1C1917] space-y-2">
+                      <div className="flex items-center justify-between text-[10px] font-mono">
+                        <span className="font-bold text-[#1C1917] uppercase flex items-center space-x-1.5">
+                          <span
+                            className="w-2.5 h-2.5 rounded-full inline-block shrink-0"
+                            style={{ backgroundColor: getNodePalette(node.id).bar }}
+                          />
+                          <span>Assigned Row Slices:</span>
+                        </span>
+                        <span className="font-black text-[#1C1917] bg-[#F2ECE1] px-1.5 py-0.5 rounded border border-[#1C1917]/30">
+                          {node.samples_count.toLocaleString()} rows total
+                        </span>
+                      </div>
+
+                      {/* Range Slices Badges */}
+                      <div className="flex flex-wrap gap-1.5 min-h-[34px] p-2 bg-[#FAF7F2] rounded border border-[#1C1917]/20 items-center">
+                        {rowSlices.filter((s) => s.nodeId === node.id).length === 0 ? (
+                          <span className="text-[10px] text-[#78716C] italic">
+                            No row segments assigned to this node yet
+                          </span>
+                        ) : (
+                          rowSlices
+                            .filter((s) => s.nodeId === node.id)
+                            .map((s) => (
+                              <span
+                                key={s.id}
+                                className={`text-[10px] font-bold font-mono px-2 py-0.5 rounded-full border ${getNodePalette(node.id).badge} flex items-center space-x-1 shadow-sm`}
+                              >
+                                <span>
+                                  Rows {s.startRow}–{s.endRow} ({Math.max(0, s.endRow - s.startRow + 1)}r)
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={() => handleRemoveSlice(s.id)}
+                                  className="hover:text-red-600 ml-0.5 font-black text-xs leading-none"
+                                  title="Remove slice"
+                                >
+                                  ×
+                                </button>
+                              </span>
+                            ))
+                        )}
+                      </div>
+
+                      <div className="flex items-center justify-between pt-0.5">
+                        <button
+                          type="button"
+                          onClick={() => handleAddSlice(node.id)}
+                          className="text-[10px] font-bold text-[#E05338] hover:text-[#c9422a] flex items-center space-x-1 bg-[#FAF7F2] hover:bg-[#F2ECE1] px-2 py-1 rounded border border-[#1C1917]/20 transition-colors"
+                        >
+                          <Plus className="w-3 h-3" />
+                          <span>+ Assign Range to Node</span>
+                        </button>
+                        <span className="text-[10px] text-[#78716C] font-mono">
+                          {((node.samples_count / Math.max(1, totalDatasetRecords)) * 100).toFixed(0)}% of dataset
+                        </span>
                       </div>
                     </div>
                   ) : (
@@ -2047,7 +2798,7 @@ export default function TrainingPage() {
       {/* ========================================================================= */}
       {/* 5. NEURAL NETWORK ARCHITECTURE & UNLIMITED HYPERPARAMETERS + LAUNCH CTA */}
       {/* ========================================================================= */}
-      <section className="p-7 rounded-2xl bg-[#FAF7F2] border-2 border-[#1C1917] retro-shadow space-y-6">
+      <section className="p-5 sm:p-7 rounded-2xl bg-[#FAF7F2] border-2 border-[#1C1917] retro-shadow space-y-5 sm:space-y-6">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b-2 border-[#1C1917]/20 pb-4">
           <div className="space-y-1">
             <div className="flex items-center space-x-2.5">
@@ -2208,6 +2959,72 @@ export default function TrainingPage() {
           </div>
         </div>
 
+        {/* Training Profile & Duration Mode Selector */}
+        <div className="p-5 sm:p-6 rounded-2xl bg-[#F7F4EE] border-2 border-[#1C1917] retro-shadow flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div className="space-y-1">
+            <span className="text-xs font-mono font-black text-[#1C1917] uppercase flex items-center space-x-2">
+              <Activity className="w-4 h-4 text-[#E05338]" />
+              <span>Training Runtime Profile (Fast vs 7-10 Min Deep Run)</span>
+            </span>
+            <p className="text-xs text-[#57534E]">
+              Choose whether to run a quick demo test (15-30s) or a production-scale 7 to 10 minute deep federated run.
+            </p>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="flex items-center space-x-2 bg-[#F2ECE1] p-1.5 rounded-xl border-2 border-[#1C1917]">
+              <button
+                type="button"
+                onClick={() => {
+                  setDurationMode("fast");
+                  if (epochs > 15) setEpochs(4);
+                }}
+                className={`px-3 py-1.5 rounded-lg text-xs font-mono font-bold transition-all ${
+                  durationMode === "fast"
+                    ? "bg-[#1C1917] text-white retro-shadow-sm"
+                    : "text-[#57534E] hover:text-[#1C1917]"
+                }`}
+              >
+                ⚡ Fast Demo (15-30s)
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setDurationMode("deep_10min");
+                  if (epochs < 30) setEpochs(70);
+                }}
+                className={`px-3 py-1.5 rounded-lg text-xs font-mono font-bold transition-all ${
+                  durationMode === "deep_10min"
+                    ? "bg-[#E05338] text-white retro-shadow-sm"
+                    : "text-[#57534E] hover:text-[#1C1917]"
+                }`}
+              >
+                🔥 Deep Production Run (7 - 10 Min)
+              </button>
+            </div>
+
+            {durationMode === "deep_10min" && (
+              <div className="flex items-center space-x-1.5 bg-[#F2ECE1] p-1.5 rounded-xl border border-[#1C1917]/40 text-xs font-mono">
+                <span className="text-[11px] text-[#78716C] font-bold px-1">Duration:</span>
+                {[7, 8, 10].map((mins) => (
+                  <button
+                    key={mins}
+                    type="button"
+                    onClick={() => setTargetMinutes(mins)}
+                    className={`px-2.5 py-1 rounded text-xs font-bold transition-all ${
+                      targetMinutes === mins
+                        ? "bg-[#1C1917] text-white font-black"
+                        : "bg-white text-[#57534E] hover:bg-stone-100 border border-[#1C1917]/20"
+                    }`}
+                  >
+                    {mins} Min
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+
         {/* Hyperparameters Calibration Bar WITH PRIMARY LAUNCH BUTTON RIGHT HERE */}
         <div className="p-6 rounded-2xl bg-[#F7F4EE] border-2 border-[#1C1917] retro-shadow flex flex-col xl:flex-row xl:items-center justify-between gap-6">
           <div className="space-y-1">
@@ -2318,8 +3135,75 @@ export default function TrainingPage() {
       {/* ========================================================================= */}
       <section
         ref={executionBoxRef}
-        className="p-7 rounded-2xl bg-[#141416] text-[#FAF7F2] border-2 border-[#1C1917] retro-shadow-lg space-y-6"
+        className="p-5 sm:p-7 md:p-8 rounded-2xl bg-[#141416] text-[#FAF7F2] border-2 border-[#1C1917] retro-shadow-lg space-y-5 sm:space-y-6"
       >
+        {/* ACTIVE LIVE TRAINING PROGRESS & TIME COUNTDOWN BANNER */}
+        {isTraining && (
+          <div className="p-4 sm:p-5 rounded-xl bg-stone-900 border-2 border-[#E05338] shadow-lg space-y-3">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-stone-800 pb-3">
+              <div className="flex items-center space-x-3">
+                <span className="relative flex h-3.5 w-3.5">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#E05338] opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-3.5 w-3.5 bg-[#E05338]"></span>
+                </span>
+                <div>
+                  <h4 className="text-sm font-black font-mono uppercase text-white tracking-wide">
+                    Live Federated Training In Progress ({durationMode === "deep_10min" ? `${targetMinutes} Min Deep Run` : "Fast Run"})
+                  </h4>
+                  <p className="text-[11px] text-stone-400 font-mono">
+                    {currentPacingEpoch
+                      ? `Epoch ${currentPacingEpoch.epoch} / ${currentPacingEpoch.total} | Loss: ${currentPacingEpoch.loss ?? "--"} | Acc: ${currentPacingEpoch.accuracy ?? "--"}%`
+                      : `Streaming hardware SGD convergence across ${activeNodes.length} active edge nodes...`}
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-3">
+                <div className="flex items-center space-x-3 text-xs font-mono bg-stone-950 px-3 py-1.5 rounded-lg border border-stone-800">
+                  <div className="text-stone-400">
+                    Elapsed: <span className="text-white font-bold">{Math.floor(elapsedTrainingSeconds / 60).toString().padStart(2, "0")}:{(elapsedTrainingSeconds % 60).toString().padStart(2, "0")}</span>
+                  </div>
+                  {remainingTrainingSeconds > 0 && (
+                    <div className="text-stone-400 border-l border-stone-800 pl-3">
+                      Remaining: <span className="text-amber-400 font-bold">{Math.floor(remainingTrainingSeconds / 60).toString().padStart(2, "0")}:{(remainingTrainingSeconds % 60).toString().padStart(2, "0")}</span>
+                    </div>
+                  )}
+                </div>
+
+                <button
+                  type="button"
+                  onClick={handleStopTraining}
+                  className="px-3.5 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-500 text-white font-mono font-black text-xs transition-all flex items-center space-x-1.5 shadow-md hover:scale-105 active:scale-95 cursor-pointer"
+                  title="Gracefully halts local training and aggregates immediately into FedAvg & ZK Proof without failing"
+                >
+                  <X className="w-3.5 h-3.5" />
+                  <span>Finalize Early ⏹️</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Live Progress Bar */}
+            <div className="space-y-1">
+              <div className="flex justify-between text-[11px] font-mono text-stone-400">
+                <span>Training Progress</span>
+                <span className="text-emerald-400 font-bold">
+                  {trainingProgressPct > 0
+                    ? `${trainingProgressPct.toFixed(1)}%`
+                    : `${Math.min(99, Math.round((elapsedTrainingSeconds / Math.max(1, durationMode === "deep_10min" ? targetMinutes * 60 : 25)) * 100))}%`}
+                </span>
+              </div>
+              <div className="w-full bg-stone-800 h-2 rounded-full overflow-hidden">
+                <div
+                  className="bg-gradient-to-r from-[#E05338] via-amber-500 to-emerald-400 h-full transition-all duration-300"
+                  style={{
+                    width: `${Math.min(100, Math.max(4, trainingProgressPct > 0 ? trainingProgressPct : (elapsedTrainingSeconds / Math.max(1, durationMode === "deep_10min" ? targetMinutes * 60 : 25)) * 100))}%`,
+                  }}
+                />
+              </div>
+            </div>
+          </div>
+        )}
+
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 border-b border-stone-800 pb-5">
           <div className="space-y-1">
             <div className="flex items-center space-x-2.5">
