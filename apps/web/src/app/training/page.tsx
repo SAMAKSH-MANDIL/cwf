@@ -40,7 +40,9 @@ import {
   ChevronUp,
   HardDrive,
   Info,
-  Shuffle
+  Shuffle,
+  Maximize2,
+  Minimize2
 } from "lucide-react";
 import LargeFileUploader, { UploadResult } from "@/components/LargeFileUploader";
 import PipelineStudio from "@/components/PipelineStudio";
@@ -1013,6 +1015,32 @@ export default function TrainingPage() {
   const [mounted, setMounted] = useState(false);
   const logsEndRef = useRef<HTMLDivElement>(null);
   const executionBoxRef = useRef<HTMLDivElement>(null);
+  const terminalLogsContainerRef = useRef<HTMLDivElement>(null);
+  const [autoScroll, setAutoScroll] = useState<boolean>(true);
+  const [isTerminalFullscreen, setIsTerminalFullscreen] = useState<boolean>(false);
+
+  // Auto-scroll effect: Automatically scrolls to bottom as epochs and logs stream in
+  useEffect(() => {
+    if (!autoScroll) return;
+    if (terminalLogsContainerRef.current) {
+      terminalLogsContainerRef.current.scrollTop = terminalLogsContainerRef.current.scrollHeight;
+    }
+    const terminalBodies = document.querySelectorAll(".fedzero-terminal-body");
+    terminalBodies.forEach((el) => {
+      el.scrollTop = el.scrollHeight;
+    });
+  }, [nodeLogs, activeLogTab, autoScroll]);
+
+  // Escape key listener to exit full-screen terminal
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && isTerminalFullscreen) {
+        setIsTerminalFullscreen(false);
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [isTerminalFullscreen]);
 
   // Initialize node logs safely whenever edgeNodes updates
   useEffect(() => {
@@ -2507,13 +2535,19 @@ export default function TrainingPage() {
                 ? expandedSpecsNodes[node.id]
                 : true;
 
+              const nodeLogsList = nodeLogs[node.id] || nodeLogs[node.name] || [];
+              const lastLogLine = nodeLogsList.length > 0 ? nodeLogsList[nodeLogsList.length - 1] : "";
+              const isNodeActivelyTraining = isTraining && node.enabled;
+
               return (
               <div
                 key={node.id}
                 className={`p-5 rounded-2xl border-2 transition-all flex flex-col justify-between space-y-4 ${
-                  node.enabled
-                    ? "bg-[#FAF7F2] border-[#1C1917] retro-shadow"
-                    : "bg-[#F4EFE6] border-[#1C1917]/30 opacity-60"
+                  !node.enabled
+                    ? "bg-[#F4EFE6] border-[#1C1917]/30 opacity-60"
+                    : isNodeActivelyTraining
+                    ? "bg-[#FAF7F2] border-emerald-600 shadow-[0_0_20px_rgba(5,150,105,0.22)] ring-2 ring-emerald-500/40"
+                    : "bg-[#FAF7F2] border-[#1C1917] retro-shadow"
                 }`}
               >
                 <div className="space-y-3">
@@ -2553,6 +2587,34 @@ export default function TrainingPage() {
                       </span>
                     </div>
                   </div>
+
+                  {/* Live Training Status for Remote Worker Node */}
+                  {isNodeActivelyTraining && (
+                    <div className="p-2.5 rounded-xl bg-emerald-950/10 border border-emerald-600/30 text-[11px] font-mono space-y-1">
+                      <div className="flex items-center justify-between">
+                        <span className="flex items-center space-x-1.5 font-bold text-emerald-800">
+                          <span className="w-2 h-2 rounded-full bg-emerald-600 animate-ping"></span>
+                          <span>ACTIVE TRAINING</span>
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setActiveLogTab(node.id);
+                            executionBoxRef.current?.scrollIntoView({ behavior: "smooth" });
+                          }}
+                          className="text-[10px] font-bold text-emerald-700 hover:text-emerald-950 underline flex items-center space-x-0.5 cursor-pointer"
+                        >
+                          <span>Terminal</span>
+                          <ArrowRight className="w-2.5 h-2.5" />
+                        </button>
+                      </div>
+                      {lastLogLine && (
+                        <p className="text-[10px] text-stone-600 truncate font-mono">
+                          {stripEmojis(lastLogLine).replace(/^\[[^\]]+\]\s*\[[^\]]+\]\s*/, "")}
+                        </p>
+                      )}
+                    </div>
+                  )}
                 </div>
 
                 {/* Real Hardware Spec Profile & Expandable Telemetry Drawer */}
@@ -3054,7 +3116,11 @@ export default function TrainingPage() {
       {/* ========================================================================= */}
       <section
         ref={executionBoxRef}
-        className="p-5 sm:p-7 md:p-8 rounded-2xl bg-[#141416] text-[#FAF7F2] border-2 border-[#1C1917] retro-shadow-lg space-y-5 sm:space-y-6"
+        className={
+          isTerminalFullscreen
+            ? "fixed inset-0 z-[100] bg-[#0E0E11] text-[#FAF7F2] p-4 sm:p-6 flex flex-col h-screen w-screen overflow-hidden space-y-3"
+            : "p-5 sm:p-7 md:p-8 rounded-2xl bg-[#141416] text-[#FAF7F2] border-2 border-[#1C1917] retro-shadow-lg space-y-5 sm:space-y-6"
+        }
       >
         {/* ACTIVE LIVE TRAINING PROGRESS & TIME COUNTDOWN BANNER */}
         {isTraining && (
@@ -3220,6 +3286,45 @@ export default function TrainingPage() {
             >
               Clear
             </button>
+
+            {/* Auto-Scroll Toggle Button */}
+            <button
+              type="button"
+              onClick={() => setAutoScroll((prev) => !prev)}
+              className={`px-3 py-1.5 rounded-lg border font-bold transition-all flex items-center space-x-1.5 cursor-pointer ${
+                autoScroll
+                  ? "bg-emerald-950/80 border-emerald-600 text-emerald-300 shadow-sm"
+                  : "bg-stone-900 border-stone-700 text-stone-400 hover:text-white"
+              }`}
+              title={autoScroll ? "Auto-scroll is ON (New logs scroll down automatically)" : "Auto-scroll is PAUSED (Click to re-enable)"}
+            >
+              <span className={`w-2 h-2 rounded-full ${autoScroll ? "bg-emerald-400 animate-pulse" : "bg-stone-500"}`}></span>
+              <span>Auto-Scroll: {autoScroll ? "ON" : "OFF"}</span>
+            </button>
+
+            {/* Fullscreen Expand / Collapse Toggle Button */}
+            <button
+              type="button"
+              onClick={() => setIsTerminalFullscreen((prev) => !prev)}
+              className={`px-3 py-1.5 rounded-lg border font-bold flex items-center space-x-1.5 cursor-pointer transition-all shadow-sm ${
+                isTerminalFullscreen
+                  ? "bg-amber-500 text-[#1C1917] border-amber-400 hover:bg-amber-400"
+                  : "bg-stone-800 hover:bg-stone-700 text-stone-200 border-stone-600"
+              }`}
+              title={isTerminalFullscreen ? "Exit Fullscreen Mode (or press Esc)" : "Expand Terminal to Fullscreen Mode"}
+            >
+              {isTerminalFullscreen ? (
+                <>
+                  <Minimize2 className="w-3.5 h-3.5 text-[#1C1917]" />
+                  <span>Exit Fullscreen (Esc)</span>
+                </>
+              ) : (
+                <>
+                  <Maximize2 className="w-3.5 h-3.5 text-emerald-400" />
+                  <span>Fullscreen ⛶</span>
+                </>
+              )}
+            </button>
           </div>
         </div>
 
@@ -3257,7 +3362,7 @@ export default function TrainingPage() {
 
         {/* LOGS DISPLAY CONTAINER: MULTI-TERMINAL SIDE-BY-SIDE GRID */}
         {activeLogTab === "all" ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+          <div className={`grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5 ${isTerminalFullscreen ? "flex-1 min-h-0 overflow-y-auto" : ""}`}>
             {displayedGridNodes.map((node) => {
               const lines = nodeLogs[node.id] || nodeLogs[node.name] || [
                 `[STANDBY] Enclave sandbox mounted for ${node.name}. Ready for training dispatch.`,
@@ -3265,7 +3370,7 @@ export default function TrainingPage() {
               return (
                 <div
                   key={node.id}
-                  className="rounded-xl bg-[#09090B] border-2 border-stone-800 flex flex-col h-[380px] overflow-hidden shadow-2xl hover:border-stone-600 transition-colors"
+                  className={`rounded-xl bg-[#09090B] border-2 border-stone-800 flex flex-col ${isTerminalFullscreen ? "h-[calc(100vh-270px)] min-h-[380px]" : "h-[380px]"} overflow-hidden shadow-2xl hover:border-stone-600 transition-colors`}
                 >
                   {/* Node Terminal Header */}
                   <div className="px-3.5 py-2.5 bg-[#141417] border-b border-stone-800 flex items-center justify-between text-xs font-mono">
@@ -3283,7 +3388,7 @@ export default function TrainingPage() {
                   {/* Terminal Lines Content */}
                   <div
                     suppressHydrationWarning
-                    className="flex-1 p-3 font-mono text-[11px] leading-relaxed text-stone-300 overflow-y-auto space-y-1"
+                    className="flex-1 p-3 font-mono text-[11px] leading-relaxed text-stone-300 overflow-y-auto space-y-1 fedzero-terminal-body"
                   >
                     {lines.map((l, i) => renderFormattedLogLine(l, i))}
                     <div ref={logsEndRef} />
@@ -3300,7 +3405,7 @@ export default function TrainingPage() {
           </div>
         ) : activeLogTab === "consolidated" ? (
           /* Consolidated All-in-One Real-Time Live Feed */
-          <div className="rounded-xl bg-[#09090B] border-2 border-red-900/60 flex flex-col h-[480px] overflow-hidden shadow-2xl">
+          <div className={`rounded-xl bg-[#09090B] border-2 border-red-900/60 flex flex-col ${isTerminalFullscreen ? "flex-1 min-h-0 h-full" : "h-[480px]"} overflow-hidden shadow-2xl`}>
             <div className="px-4 py-3 bg-[#141417] border-b border-stone-800 flex items-center justify-between text-xs font-mono">
               <div className="flex items-center space-x-2">
                 <span className="w-2.5 h-2.5 rounded-full bg-red-500 animate-pulse"></span>
@@ -3319,8 +3424,9 @@ export default function TrainingPage() {
             </div>
 
             <div
+              ref={terminalLogsContainerRef}
               suppressHydrationWarning
-              className="flex-1 p-4 font-mono text-xs leading-relaxed text-stone-300 overflow-y-auto space-y-1 bg-black/40"
+              className="flex-1 p-4 font-mono text-xs leading-relaxed text-stone-300 overflow-y-auto space-y-1 bg-black/40 fedzero-terminal-body"
             >
               {(nodeLogs["all"] && nodeLogs["all"].length > 0
                 ? nodeLogs["all"]
@@ -3333,7 +3439,7 @@ export default function TrainingPage() {
           </div>
         ) : (
           /* Single Node Full-Screen Terminal View */
-          <div className="rounded-xl bg-[#09090B] border-2 border-stone-800 flex flex-col h-[460px] overflow-hidden shadow-2xl">
+          <div className={`rounded-xl bg-[#09090B] border-2 border-stone-800 flex flex-col ${isTerminalFullscreen ? "flex-1 min-h-0 h-full" : "h-[460px]"} overflow-hidden shadow-2xl`}>
             <div className="px-4 py-3 bg-[#141417] border-b border-stone-800 flex items-center justify-between text-xs font-mono">
               <div className="flex items-center space-x-2">
                 <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse"></span>
@@ -3350,8 +3456,9 @@ export default function TrainingPage() {
             </div>
 
             <div
+              ref={terminalLogsContainerRef}
               suppressHydrationWarning
-              className="flex-1 p-4 font-mono text-xs leading-relaxed text-stone-300 overflow-y-auto space-y-1"
+              className="flex-1 p-4 font-mono text-xs leading-relaxed text-stone-300 overflow-y-auto space-y-1 fedzero-terminal-body"
             >
               {(nodeLogs[activeLogTab] || nodeLogs[displayedGridNodes.find((n) => n.id === activeLogTab)?.name || ""] || [
                 `[STANDBY] Enclave sandbox mounted. Ready for training dispatch.`,
