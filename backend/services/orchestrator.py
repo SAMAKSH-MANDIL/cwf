@@ -140,6 +140,9 @@ class NetworkOrchestrator:
                         device_name=prov.device_name,
                         hardware_tier=prov.hardware_tier,
                         declared_vram_gb=prov.vram_gb or 16,
+                        cpu_name=prov.cpu_name,
+                        os_name=prov.os_name,
+                        system_ram_gb=prov.system_ram_gb,
                     )
                     existing_wallets.add(prov.wallet_address.lower())
         finally:

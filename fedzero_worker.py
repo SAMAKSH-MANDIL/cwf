@@ -512,10 +512,22 @@ def detect_real_system_hardware():
             pass
 
     # 3. Total System Physical RAM (in GB)
-    ram_gb = 8.0
+    ram_gb = 16
     try:
         import psutil
-        ram_gb = round(psutil.virtual_memory().total / (1024**3), 1)
+        total_gb = psutil.virtual_memory().total / (1024**3)
+        if 14 <= total_gb <= 18:
+            ram_gb = 16
+        elif 7 <= total_gb <= 10:
+            ram_gb = 8
+        elif 22 <= total_gb <= 26:
+            ram_gb = 24
+        elif 29 <= total_gb <= 36:
+            ram_gb = 32
+        elif 10 <= total_gb <= 14:
+            ram_gb = 12
+        else:
+            ram_gb = int(round(total_gb))
     except Exception:
         if platform.system() == "Windows":
             try:
@@ -535,13 +547,21 @@ def detect_real_system_hardware():
                 stat = MEMORYSTATUSEX()
                 stat.dwLength = ctypes.sizeof(MEMORYSTATUSEX)
                 ctypes.windll.kernel32.GlobalMemoryStatusEx(ctypes.byref(stat))
-                ram_gb = round(stat.ullTotalPhys / (1024**3), 1)
+                total_gb = stat.ullTotalPhys / (1024**3)
+                if 14 <= total_gb <= 18:
+                    ram_gb = 16
+                elif 7 <= total_gb <= 10:
+                    ram_gb = 8
+                elif 29 <= total_gb <= 36:
+                    ram_gb = 32
+                else:
+                    ram_gb = int(round(total_gb))
             except Exception:
                 pass
         elif platform.system() == "Darwin":
             try:
                 out = subprocess.check_output(["sysctl", "-n", "hw.memsize"], text=True, timeout=2)
-                ram_gb = round(int(out.strip()) / (1024**3), 1)
+                ram_gb = int(round(int(out.strip()) / (1024**3)))
             except Exception:
                 pass
         elif platform.system() == "Linux":
@@ -550,7 +570,7 @@ def detect_real_system_hardware():
                     for line in f:
                         if "MemTotal" in line:
                             kb = int(line.split()[1])
-                            ram_gb = round(kb / (1024**2), 1)
+                            ram_gb = int(round(kb / (1024**2)))
                             break
             except Exception:
                 pass

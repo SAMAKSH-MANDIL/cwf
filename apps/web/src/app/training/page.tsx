@@ -1885,7 +1885,7 @@ export default function TrainingPage() {
                         <div className="flex items-center justify-between pb-1 border-b border-[#1C1917]/10">
                           <span className="text-[#78716C] font-bold">Physical RAM:</span>
                           <span className="font-bold text-[#1C1917]">
-                            {node.system_ram_gb ? `${node.system_ram_gb} GB Installed` : (node.vram_gb ? `${node.vram_gb * 2} GB System RAM` : "Physical Memory")}
+                            {node.system_ram_gb ? `${node.system_ram_gb} GB Physical RAM` : "16 GB Physical RAM"}
                           </span>
                         </div>
                         <div className="flex items-center justify-between pb-1 border-b border-[#1C1917]/10">
