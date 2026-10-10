@@ -55,7 +55,7 @@ const SYNTHETIC_DATASETS = [
     description: "Multivariate patient diagnostic records with clinical biomarkers for early pathology detection.",
     rowsCount: 480,
     target: "diagnostic_risk",
-    durationTag: "⚡ Fast Demo (15s) or 🔥 Deep Run",
+    durationTag: "Clinical Baseline • 480 Rows",
     columns: [
       { name: "diagnostic_risk", type: "integer", unique: 2, encoding: "Binary Encoding", size: "3.8 KB", missing: "0 (0%)", range: "[0, 1] Binary", isTarget: true },
       { name: "age", type: "numeric", unique: 52, encoding: "Numeric (Standardized)", size: "3.8 KB", missing: "0 (0%)", range: "24 - 86 yrs", isTarget: false },
@@ -88,7 +88,7 @@ const SYNTHETIC_DATASETS = [
     description: "High-throughput 32-biomarker somatic mutation profiling and next-generation RNA-seq expression telemetry. Heavy multi-parameter convergence across distributed medical enclaves.",
     rowsCount: 48500,
     target: "malignant_pathology",
-    durationTag: "🔥 7 - 10 Min Deep Run (48.5K Rows)",
+    durationTag: "Enterprise Scale • 48.5K Rows",
     columns: [
       { name: "malignant_pathology", type: "integer", unique: 2, encoding: "Binary Encoding", size: "388 KB", missing: "0 (0%)", range: "[0: Benign, 1: Malignant]", isTarget: true },
       { name: "brca1_expression", type: "numeric", unique: 3420, encoding: "Numeric (Standardized)", size: "388 KB", missing: "0 (0%)", range: "0.12 - 14.80 FPKM", isTarget: false },
@@ -121,7 +121,7 @@ const SYNTHETIC_DATASETS = [
     description: "Sub-millisecond institutional order book depth, cross-exchange liquidity imbalances, and volatility spikes across 24 latency-sensitive signals.",
     rowsCount: 64000,
     target: "flash_crash_risk",
-    durationTag: "🔥 7 - 10 Min Deep Run (64.0K Rows)",
+    durationTag: "High-Throughput • 64.0K Rows",
     columns: [
       { name: "flash_crash_risk", type: "integer", unique: 2, encoding: "Binary Encoding", size: "512 KB", missing: "0 (0%)", range: "[0: Stable, 1: Flash Crash Alert]", isTarget: true },
       { name: "bid_ask_spread_bps", type: "numeric", unique: 4800, encoding: "Numeric (Standardized)", size: "512 KB", missing: "0 (0%)", range: "0.2 - 48.5 bps", isTarget: false },
@@ -150,7 +150,7 @@ const SYNTHETIC_DATASETS = [
     description: "Credit card telemetry, transaction velocity, risk scores, and geospatial signals for fraud detection.",
     rowsCount: 750,
     target: "is_fraud",
-    durationTag: "⚡ Fast Demo (15s) or 🔥 Deep Run",
+    durationTag: "Production Telemetry • 750 Rows",
     columns: [
       { name: "is_fraud", type: "integer", unique: 2, encoding: "Binary Encoding", size: "6.0 KB", missing: "0 (0%)", range: "[0: Legitimate, 1: Fraud]", isTarget: true },
       { name: "tx_amount_usd", type: "numeric", unique: 412, encoding: "Numeric (Standardized)", size: "6.0 KB", missing: "0 (0%)", range: "$1.50 - $4,850.00", isTarget: false },
@@ -177,7 +177,7 @@ const SYNTHETIC_DATASETS = [
     description: "Multi-sensor industrial telemetry monitoring rotor temperature, acoustic vibrations, and RPM deviations.",
     rowsCount: 600,
     target: "machine_failure",
-    durationTag: "⚡ Fast Demo (15s) or 🔥 Deep Run",
+    durationTag: "Industrial Edge • 600 Rows",
     columns: [
       { name: "machine_failure", type: "integer", unique: 2, encoding: "Binary Encoding", size: "4.8 KB", missing: "0 (0%)", range: "[0: Normal, 1: Failure]", isTarget: true },
       { name: "vibration_rms", type: "numeric", unique: 184, encoding: "Numeric (Standardized)", size: "4.8 KB", missing: "0 (0%)", range: "0.45 - 8.92 mm/s", isTarget: false },
@@ -202,7 +202,7 @@ const SYNTHETIC_DATASETS = [
     description: "16-dimensional PCA eigenprojections of handwritten digits for distributed privacy-preserving classification.",
     rowsCount: 900,
     target: "is_odd_digit",
-    durationTag: "⚡ Fast Demo (15s) or 🔥 Deep Run",
+    durationTag: "Vision Embeddings • 900 Rows",
     columns: [
       { name: "is_odd_digit", type: "integer", unique: 2, encoding: "Binary Encoding", size: "7.2 KB", missing: "0 (0%)", range: "[0: Even, 1: Odd]", isTarget: true },
       { name: "pca_component_01", type: "numeric", unique: 480, encoding: "Numeric (Standardized)", size: "7.2 KB", missing: "0 (0%)", range: "[-4.2, +5.1]", isTarget: false },
@@ -251,8 +251,6 @@ export default function TrainingPage() {
   // =========================================================================
   const [datasetMode, setDatasetMode] = useState<"synthetic" | "custom">("synthetic");
   const [selectedPresetId, setSelectedPresetId] = useState<string>("healthcare");
-  const [durationMode, setDurationMode] = useState<"fast" | "deep_10min">("fast");
-  const [targetMinutes, setTargetMinutes] = useState<number>(8); // 8 minutes default for deep mode
   const [elapsedTrainingSeconds, setElapsedTrainingSeconds] = useState<number>(0);
   const [remainingTrainingSeconds, setRemainingTrainingSeconds] = useState<number>(0);
   const [trainingProgressPct, setTrainingProgressPct] = useState<number>(0);
@@ -349,11 +347,6 @@ export default function TrainingPage() {
       setSelectedTarget(p.target);
       const feats = p.columns.filter((c) => c.name !== p.target).map((c) => c.name);
       setSelectedFeatures(feats.slice(0, 8)); // select first 8 features by default
-      if (presetId === "genomics_deep" || presetId === "financial_hft") {
-        setDurationMode("deep_10min");
-        setEpochs(70);
-        setTargetMinutes(8);
-      }
     }
   };
 
@@ -1004,6 +997,7 @@ export default function TrainingPage() {
   const [copiedLogNode, setCopiedLogNode] = useState<string | null>(null);
   const [roundStats, setLastRoundStats] = useState<{
     round: number;
+    durationSec?: number;
     accBefore: number;
     accAfter: number;
     lossBefore: number;
@@ -1288,12 +1282,12 @@ export default function TrainingPage() {
               });
             } else if (evtType === "ROUND_COMPLETED") {
               setIsTraining(false);
-              setElapsedTrainingSeconds(0);
               setRemainingTrainingSeconds(0);
               setTrainingProgressPct(100);
               setCurrentPacingEpoch(null);
               setLastRoundStats({
                 round: data.round_number,
+                durationSec: data.duration_sec ?? elapsedTrainingSeconds,
                 accBefore: data.accuracy_before,
                 accAfter: data.accuracy_after,
                 lossBefore: data.loss_before,
@@ -1446,9 +1440,8 @@ export default function TrainingPage() {
       return next;
     });
 
-    const targetSec = durationMode === "deep_10min" ? targetMinutes * 60 : 25;
     setElapsedTrainingSeconds(0);
-    setRemainingTrainingSeconds(targetSec);
+    setRemainingTrainingSeconds(0);
     setTrainingProgressPct(0);
 
     const payload = {
@@ -1458,8 +1451,6 @@ export default function TrainingPage() {
       active_node_ids: activeNodes.map((n) => n.wallet_address || n.name || n.id),
       partition_mode: partitionMode,
       row_slices: partitionMode === "ranges" ? rowSlices : undefined,
-      duration_mode: durationMode,
-      target_duration_sec: targetSec,
     };
 
     // If WebSocket is connected, send command directly over socket
@@ -1478,8 +1469,6 @@ export default function TrainingPage() {
           active_node_ids: activeNodes.map((n) => n.wallet_address || n.name || n.id),
           partition_mode: partitionMode,
           row_slices: partitionMode === "ranges" ? rowSlices : undefined,
-          duration_mode: durationMode,
-          target_duration_sec: targetSec,
         }),
       });
       if (res.ok) {
@@ -1723,15 +1712,9 @@ export default function TrainingPage() {
                         <span>Target: <strong className="text-[#1C1917]">{preset.target}</strong></span>
                       </div>
                       {(preset as any).durationTag && (
-                        <div
-                          className={`text-[10px] font-mono font-bold px-2 py-1 rounded border flex items-center justify-between ${
-                            isDeepRun
-                              ? "bg-amber-500/15 text-amber-900 border-amber-600/30"
-                              : "bg-emerald-500/10 text-emerald-800 border-emerald-600/25"
-                          }`}
-                        >
+                        <div className="text-[10px] font-mono font-bold px-2.5 py-1 rounded border flex items-center justify-between bg-stone-100 text-stone-700 border-stone-300">
                           <span>{(preset as any).durationTag}</span>
-                          {isDeepRun && <span className="text-[9px] uppercase px-1 rounded bg-amber-600 text-white font-black">7-10m</span>}
+                          <span className="text-[9px] uppercase px-1.5 py-0.5 rounded bg-[#1C1917] text-white font-mono">Hardware Native</span>
                         </div>
                       )}
                     </div>
@@ -2959,71 +2942,7 @@ export default function TrainingPage() {
           </div>
         </div>
 
-        {/* Training Profile & Duration Mode Selector */}
-        <div className="p-5 sm:p-6 rounded-2xl bg-[#F7F4EE] border-2 border-[#1C1917] retro-shadow flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <div className="space-y-1">
-            <span className="text-xs font-mono font-black text-[#1C1917] uppercase flex items-center space-x-2">
-              <Activity className="w-4 h-4 text-[#E05338]" />
-              <span>Training Runtime Profile (Fast vs 7-10 Min Deep Run)</span>
-            </span>
-            <p className="text-xs text-[#57534E]">
-              Choose whether to run a quick demo test (15-30s) or a production-scale 7 to 10 minute deep federated run.
-            </p>
-          </div>
 
-          <div className="flex flex-wrap items-center gap-3">
-            <div className="flex items-center space-x-2 bg-[#F2ECE1] p-1.5 rounded-xl border-2 border-[#1C1917]">
-              <button
-                type="button"
-                onClick={() => {
-                  setDurationMode("fast");
-                  if (epochs > 15) setEpochs(4);
-                }}
-                className={`px-3 py-1.5 rounded-lg text-xs font-mono font-bold transition-all ${
-                  durationMode === "fast"
-                    ? "bg-[#1C1917] text-white retro-shadow-sm"
-                    : "text-[#57534E] hover:text-[#1C1917]"
-                }`}
-              >
-                ⚡ Fast Demo (15-30s)
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setDurationMode("deep_10min");
-                  if (epochs < 30) setEpochs(70);
-                }}
-                className={`px-3 py-1.5 rounded-lg text-xs font-mono font-bold transition-all ${
-                  durationMode === "deep_10min"
-                    ? "bg-[#E05338] text-white retro-shadow-sm"
-                    : "text-[#57534E] hover:text-[#1C1917]"
-                }`}
-              >
-                🔥 Deep Production Run (7 - 10 Min)
-              </button>
-            </div>
-
-            {durationMode === "deep_10min" && (
-              <div className="flex items-center space-x-1.5 bg-[#F2ECE1] p-1.5 rounded-xl border border-[#1C1917]/40 text-xs font-mono">
-                <span className="text-[11px] text-[#78716C] font-bold px-1">Duration:</span>
-                {[7, 8, 10].map((mins) => (
-                  <button
-                    key={mins}
-                    type="button"
-                    onClick={() => setTargetMinutes(mins)}
-                    className={`px-2.5 py-1 rounded text-xs font-bold transition-all ${
-                      targetMinutes === mins
-                        ? "bg-[#1C1917] text-white font-black"
-                        : "bg-white text-[#57534E] hover:bg-stone-100 border border-[#1C1917]/20"
-                    }`}
-                  >
-                    {mins} Min
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-        </div>
 
         {/* Hyperparameters Calibration Bar WITH PRIMARY LAUNCH BUTTON RIGHT HERE */}
         <div className="p-6 rounded-2xl bg-[#F7F4EE] border-2 border-[#1C1917] retro-shadow flex flex-col xl:flex-row xl:items-center justify-between gap-6">
@@ -3148,7 +3067,7 @@ export default function TrainingPage() {
                 </span>
                 <div>
                   <h4 className="text-sm font-black font-mono uppercase text-white tracking-wide">
-                    Live Federated Training In Progress ({durationMode === "deep_10min" ? `${targetMinutes} Min Deep Run` : "Fast Run"})
+                    Live Federated Training In Progress (Native Hardware Compute)
                   </h4>
                   <p className="text-[11px] text-stone-400 font-mono">
                     {currentPacingEpoch
@@ -3160,14 +3079,13 @@ export default function TrainingPage() {
 
               <div className="flex items-center gap-3">
                 <div className="flex items-center space-x-3 text-xs font-mono bg-stone-950 px-3 py-1.5 rounded-lg border border-stone-800">
-                  <div className="text-stone-400">
-                    Elapsed: <span className="text-white font-bold">{Math.floor(elapsedTrainingSeconds / 60).toString().padStart(2, "0")}:{(elapsedTrainingSeconds % 60).toString().padStart(2, "0")}</span>
+                  <div className="text-stone-300 flex items-center space-x-1.5">
+                    <span className="text-[#E05338]">⏱️</span>
+                    <span>Elapsed:</span>
+                    <span className="text-white font-bold ml-1">
+                      {Math.floor(elapsedTrainingSeconds / 60).toString().padStart(2, "0")}:{(elapsedTrainingSeconds % 60).toString().padStart(2, "0")}
+                    </span>
                   </div>
-                  {remainingTrainingSeconds > 0 && (
-                    <div className="text-stone-400 border-l border-stone-800 pl-3">
-                      Remaining: <span className="text-amber-400 font-bold">{Math.floor(remainingTrainingSeconds / 60).toString().padStart(2, "0")}:{(remainingTrainingSeconds % 60).toString().padStart(2, "0")}</span>
-                    </div>
-                  )}
                 </div>
 
                 <button
@@ -3185,18 +3103,18 @@ export default function TrainingPage() {
             {/* Live Progress Bar */}
             <div className="space-y-1">
               <div className="flex justify-between text-[11px] font-mono text-stone-400">
-                <span>Training Progress</span>
+                <span>Epoch Convergence Progress</span>
                 <span className="text-emerald-400 font-bold">
                   {trainingProgressPct > 0
                     ? `${trainingProgressPct.toFixed(1)}%`
-                    : `${Math.min(99, Math.round((elapsedTrainingSeconds / Math.max(1, durationMode === "deep_10min" ? targetMinutes * 60 : 25)) * 100))}%`}
+                    : `${currentPacingEpoch ? Math.round((currentPacingEpoch.epoch / currentPacingEpoch.total) * 100) : 0}%`}
                 </span>
               </div>
               <div className="w-full bg-stone-800 h-2 rounded-full overflow-hidden">
                 <div
                   className="bg-gradient-to-r from-[#E05338] via-amber-500 to-emerald-400 h-full transition-all duration-300"
                   style={{
-                    width: `${Math.min(100, Math.max(4, trainingProgressPct > 0 ? trainingProgressPct : (elapsedTrainingSeconds / Math.max(1, durationMode === "deep_10min" ? targetMinutes * 60 : 25)) * 100))}%`,
+                    width: `${Math.min(100, Math.max(4, trainingProgressPct > 0 ? trainingProgressPct : (currentPacingEpoch ? (currentPacingEpoch.epoch / currentPacingEpoch.total) * 100 : 4)))}%`,
                   }}
                 />
               </div>
@@ -3446,7 +3364,7 @@ export default function TrainingPage() {
         {/* Round Result Summary (Shown when round finishes) */}
         {roundStats && (
           <div className="space-y-3">
-            <div className="p-4 rounded-xl bg-stone-900 border border-stone-700 grid grid-cols-2 md:grid-cols-4 gap-4 text-xs font-mono">
+            <div className="p-4 rounded-xl bg-stone-900 border border-stone-700 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4 text-xs font-mono">
               <div>
                 <span className="text-stone-400 block text-[10px] uppercase">Accuracy Progression</span>
                 <span className="text-emerald-400 font-bold text-sm">
@@ -3457,6 +3375,12 @@ export default function TrainingPage() {
                 <span className="text-stone-400 block text-[10px] uppercase">Global Loss Delta</span>
                 <span className="text-white font-bold text-sm">
                   {roundStats.lossBefore} → {roundStats.lossAfter}
+                </span>
+              </div>
+              <div>
+                <span className="text-stone-400 block text-[10px] uppercase">Actual Compute Time</span>
+                <span className="text-amber-400 font-bold text-sm">
+                  {roundStats.durationSec ? `${roundStats.durationSec}s` : `${elapsedTrainingSeconds > 0 ? `${elapsedTrainingSeconds}s` : "Hardware Native"}`}
                 </span>
               </div>
               <div>

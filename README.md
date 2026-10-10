@@ -323,8 +323,8 @@ Open **`http://localhost:3000`** in your browser.
 ### 4. Running a Live Federated Training Round
 1. Open `http://localhost:3000/training`.
 2. Select a dataset (e.g., **Genomic Multi-Omics Sequencing**).
-3. Select your desired runtime profile (**⚡ Fast Demo** or **🔥 Deep Production Run (7 - 10 Min)**).
-4. Click **START TRAINING ROUND ⚡** to watch live epoch convergence, loss decay, and multi-chain settlement.
+3. Configure your desired epochs and learning rate.
+4. Click **START TRAINING ROUND ⚡** to observe real-time native hardware convergence, loss decay, Halo2 zkML proof synthesis, and dual-chain settlement.
 
 ---
 

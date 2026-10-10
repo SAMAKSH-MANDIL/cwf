@@ -226,40 +226,24 @@ def run_live_round(payload: RunRoundRequest = RunRoundRequest()):
     Executes a live end-to-end federated round:
     Local Training -> zkML Proof -> Arbitrum Verify -> Relayer -> Solana Reward -> FedAvg.
     """
-    if payload.duration_mode == "deep_10min" or (payload.target_duration_sec and payload.target_duration_sec >= 300):
-        import threading
-        threading.Thread(
-            target=orchestrator.execute_live_round,
-            args=(
-                payload.epochs,
-                payload.learning_rate,
-                payload.simulate_corrupted_proof,
-                payload.active_node_ids,
-                payload.partition_mode,
-                payload.row_slices,
-                payload.duration_mode,
-                payload.target_duration_sec,
-            ),
-            daemon=True,
-        ).start()
-        return {
-            "status": "STARTED",
-            "round_id": orchestrator.fl_coordinator.current_round + 1,
-            "duration_mode": "deep_10min",
-            "message": "Round launched in deep mode (7-10 min). Telemetry streaming on WebSocket.",
-        }
-
-    result = orchestrator.execute_live_round(
-        local_epochs=payload.epochs,
-        learning_rate=payload.learning_rate,
-        simulate_corrupt_proof_node=payload.simulate_corrupted_proof,
-        active_node_ids=payload.active_node_ids,
-        partition_mode=payload.partition_mode,
-        row_slices=payload.row_slices,
-        duration_mode=payload.duration_mode,
-        target_duration_sec=payload.target_duration_sec,
-    )
-    return result
+    import threading
+    threading.Thread(
+        target=orchestrator.execute_live_round,
+        args=(
+            payload.epochs,
+            payload.learning_rate,
+            payload.simulate_corrupted_proof,
+            payload.active_node_ids,
+            payload.partition_mode,
+            payload.row_slices,
+        ),
+        daemon=True,
+    ).start()
+    return {
+        "status": "STARTED",
+        "round_id": orchestrator.fl_coordinator.current_round + 1,
+        "message": "Round launched at native hardware compute speed. Telemetry streaming on WebSocket.",
+    }
 
 
 @app.get("/api/training/latest-round-logs")

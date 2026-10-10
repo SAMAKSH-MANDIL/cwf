@@ -803,15 +803,7 @@ class NetworkOrchestrator:
         self.stop_requested = False
         start_time = time.time()
 
-        is_deep_mode = (
-            (duration_mode == "deep_10min")
-            or (target_duration_sec is not None and target_duration_sec >= 300)
-            or (local_epochs >= 40)
-        )
-        target_duration = float(target_duration_sec or (480.0 if is_deep_mode else 15.0))
-        actual_epochs = max(local_epochs, 70) if is_deep_mode else local_epochs
-        # Allocate 85% of target duration to federated epochs, remaining 15% to zkML & dual-chain
-        step_delay = max(0.5, (target_duration * 0.85) / actual_epochs) if is_deep_mode else 0.0
+        actual_epochs = max(1, int(local_epochs))
 
         db = SessionLocal()
         round_number = self.fl_coordinator.current_round + 1
@@ -881,8 +873,6 @@ class NetworkOrchestrator:
             "round_number": round_number,
             "model_id": self.model_id,
             "base_hash": base_hash,
-            "duration_mode": "deep_10min" if is_deep_mode else "fast",
-            "target_duration_sec": target_duration,
             "total_epochs": actual_epochs,
             "active_nodes_count": len(participating_clients),
             "participating_clients": [
@@ -897,8 +887,7 @@ class NetworkOrchestrator:
             ],
         })
 
-        mode_desc = f"Deep Enterprise Mode (~{target_duration/60:.1f} Mins, {actual_epochs} Epochs)" if is_deep_mode else f"Fast Verification Mode ({actual_epochs} Epochs)"
-        log_msg("Coordinator", f"[INIT] Starting Federated Round #{round_number} ({mode_desc}) for model {self.model_id}")
+        log_msg("Coordinator", f"[INIT] Starting Federated Round #{round_number} ({actual_epochs} Epochs, Native Hardware Compute) for model {self.model_id}")
         log_msg("Coordinator", f"[DISPATCH] Broadcasting global baseline weights (Hash: {base_hash[:16]}...) to {len(participating_clients)} active edge nodes")
         if partition_mode == "ranges" and row_slices:
             log_msg("Coordinator", f"[DATA_PARTITION] Row-range partitioning enabled ({len(row_slices)} range segments assigned across edge nodes)")
@@ -998,27 +987,16 @@ class NetworkOrchestrator:
                     "round_number": round_number,
                 })
 
-            # Broadcast Pacing Update with elapsed & remaining time
+            # Broadcast Pacing Update with actual elapsed time & convergence progress
             elapsed_sec = time.time() - start_time
-            remaining_sec = max(0.0, (actual_epochs - ep) * step_delay)
             progress_pct = min(100.0, (ep / actual_epochs) * 100.0)
             ws_manager.broadcast_sync("ROUND_PACING_UPDATE", {
                 "epoch": ep,
                 "total_epochs": actual_epochs,
                 "elapsed_sec": round(elapsed_sec, 1),
-                "remaining_sec": round(remaining_sec, 1),
                 "progress_pct": round(progress_pct, 1),
                 "round_number": round_number,
-                "duration_mode": "deep_10min" if is_deep_mode else "fast",
             })
-
-            # Pace epochs smoothly if in deep mode (sleep in small 0.2s slices for responsive early stop)
-            if step_delay > 0:
-                t_end = time.time() + step_delay
-                while time.time() < t_end:
-                    if self.stop_requested:
-                        break
-                    time.sleep(0.2)
 
         # -------------------------------------------------------------
         # STEP 2: LOCAL RESULTS FINALIZATION & ZKML PROOF SYNTHESIS
@@ -1092,14 +1070,8 @@ class NetworkOrchestrator:
             log_msg(client.name, f"[TRAIN_COMPLETE] Local training complete! Loss: {loss_b:.4f} -> {loss_a:.4f} (Accuracy gain: +{acc_g:.1f}%)")
             log_msg(client.name, f"[WEIGHT_UPDATE] Calculated weight delta update: L2 Norm = {local_res['delta_norm']:.4f} | Hash = {local_res['update_hash'][:16]}...")
 
-            # zkML Proof Generation with progressive stages in deep mode
-            if is_deep_mode:
-                log_msg(client.name, f"[ZKML_PROVER] Compiling ONNX witness into Halo2 KZG arithmetic circuit (14,208 constraints)...")
-                time.sleep(1.2)
-                log_msg(client.name, f"[ZKML_PROVER] Computing KZG polynomial commitments on BN254 elliptic curve...")
-                time.sleep(1.2)
-            else:
-                log_msg(client.name, f"[ZKML_PROVER] Compiling ONNX witness into Halo2 KZG arithmetic circuit (14,208 constraints)...")
+            # zkML Proof Generation
+            log_msg(client.name, f"[ZKML_PROVER] Compiling ONNX witness into Halo2 KZG arithmetic circuit (14,208 constraints)...")
 
             proof_bundle = self.zkml_engine.generate_proof(
                 base_model_hash=base_hash,
@@ -1143,8 +1115,6 @@ class NetworkOrchestrator:
                 "round_number": round_number,
             })
             log_msg("Arbitrum", f"[VERIFY_SUBMIT] Verifying proof for {client.name} on ZKVerifier.sol & ContributionRegistry.sol...")
-            if is_deep_mode:
-                time.sleep(1.0)
 
             arb_ok, arb_evt = self.arbitrum.submit_contribution(
                 contributor=client.wallet_address,
@@ -1180,8 +1150,6 @@ class NetworkOrchestrator:
             sol_result = {"success": False, "reward_amount": 0.0, "tx_signature": None}
             if is_valid and arb_ok:
                 log_msg("Relayer", f"[BRIDGE_FORWARD] Cross-Chain Relayer forwarding Arbitrum verification event to Solana Program...")
-                if is_deep_mode:
-                    time.sleep(1.0)
                 sol_result = self.solana.process_arbitrum_verified_contribution(
                     contributor=client.wallet_address,
                     model_id=self.model_id,
@@ -1304,6 +1272,7 @@ class NetworkOrchestrator:
 
         ws_manager.broadcast_sync("ROUND_COMPLETED", {
             "round_number": round_number,
+            "duration_sec": round(time.time() - start_time, 2),
             "accuracy_before": round(eval_before["accuracy"] * 100, 2),
             "accuracy_after": round(eval_after["accuracy"] * 100, 2),
             "accuracy_delta": round(acc_delta * 100, 2),
