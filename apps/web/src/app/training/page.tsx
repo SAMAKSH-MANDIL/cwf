@@ -1142,7 +1142,12 @@ export default function TrainingPage() {
     return list;
   }, [activeNodes, nodeLogs]);
 
-  // Real-Time WebSocket Telemetry Connection & Multi-Node Event Bus
+  const edgeNodesRef = useRef(edgeNodes);
+  useEffect(() => {
+    edgeNodesRef.current = edgeNodes;
+  }, [edgeNodes]);
+
+  // Real-Time WebSocket Telemetry Connection & Multi-Node Event Bus (Mounted once)
   useEffect(() => {
     let ws: WebSocket | null = null;
     let reconnectTimer: any = null;
@@ -1241,7 +1246,7 @@ export default function TrainingPage() {
               setNodeLogs((prev) => {
                 const next = { ...prev };
                 const tLower = (tag || "").toLowerCase();
-                const matched = edgeNodes.find(
+                const matched = edgeNodesRef.current.find(
                   (n) =>
                     n.name.toLowerCase() === tLower ||
                     n.id.toLowerCase() === tLower ||
@@ -1388,22 +1393,27 @@ export default function TrainingPage() {
             data.round_number &&
             data.round_number > 0 &&
             data.node_logs &&
-            Object.keys(data.node_logs).length > 0 &&
-            data.round_number !== lastSeenRound
+            Object.keys(data.node_logs).length > 0
           ) {
-            lastSeenRound = data.round_number;
             setNodeLogs((prev) => {
               const next = { ...prev };
               Object.entries(data.node_logs).forEach(([rawKey, lines]) => {
                 if (Array.isArray(lines) && lines.length > 0) {
-                  const matched = edgeNodes.find(
+                  const matched = edgeNodesRef.current.find(
                     (n) =>
                       n.id.toLowerCase() === rawKey.toLowerCase() ||
                       n.name.toLowerCase() === rawKey.toLowerCase() ||
                       n.wallet_address.toLowerCase() === rawKey.toLowerCase()
                   );
                   const targetKey = matched ? matched.id : rawKey;
-                  next[targetKey] = lines as string[];
+                  next[targetKey] = Array.from(new Set([...(next[targetKey] || []), ...(lines as string[])]));
+                  if (matched) {
+                    next[matched.name] = Array.from(new Set([...(next[matched.name] || []), ...(lines as string[])]));
+                    if (matched.wallet_address) {
+                      next[matched.wallet_address] = Array.from(new Set([...(next[matched.wallet_address] || []), ...(lines as string[])]));
+                    }
+                  }
+                  next["all"] = Array.from(new Set([...(next["all"] || []), ...(lines as string[])]));
                 }
               });
               return next;
@@ -1412,7 +1422,7 @@ export default function TrainingPage() {
         } catch (e) {
           // silent fallback
         }
-      }, 2000);
+      }, 1500);
     };
 
     connectWs();
@@ -1425,7 +1435,7 @@ export default function TrainingPage() {
         ws.close();
       }
     };
-  }, [edgeNodes, activeNodes]);
+  }, []);
 
   const copyLogs = (key: string) => {
     let text = "";
@@ -1512,11 +1522,6 @@ export default function TrainingPage() {
       row_slices: partitionMode === "ranges" ? rowSlices : undefined,
     };
 
-    // If WebSocket is connected, send command directly over socket
-    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-      wsRef.current.send(JSON.stringify(payload));
-    }
-
     // Call live backend endpoint to trigger pipeline execution & persist DB state
     try {
       const res = await fetch("/api/training/run-round", {
@@ -1530,27 +1535,27 @@ export default function TrainingPage() {
           row_slices: partitionMode === "ranges" ? rowSlices : undefined,
         }),
       });
-      if (res.ok) {
-        const data = await res.json();
-        if (data && data.status === "STARTED") {
-          return;
-        }
-        if (data && data.round_id) {
-          setLastRoundStats({
-            round: data.round_id,
-            accBefore: data.accuracy_before != null ? +(data.accuracy_before * 100).toFixed(1) : 92.1,
-            accAfter: data.accuracy_after != null ? +(data.accuracy_after * 100).toFixed(1) : 96.9,
-            lossBefore: data.loss_before != null ? +data.loss_before.toFixed(4) : 0.364,
-            lossAfter: data.loss_after != null ? +data.loss_after.toFixed(4) : 0.108,
-            zkProofHash: data.new_model_hash?.substring(0, 18) || "0x...",
-            arbitrumTx: data.arbitrum_tx?.substring(0, 18) || "0x...",
-            solanaSig: data.solana_payouts?.[0]?.tx_signature?.substring(0, 18) || "SolanaConfirmed",
-          });
-          setIsTraining(false);
-          setTimeout(() => setActiveStep(null), 5000);
-        }
-      } else {
+      if (!res.ok) {
         setIsTraining(false);
+      } else {
+        const data = await res.json();
+        if (data.status === "ALREADY_ACTIVE") {
+          // If coordinator has a lingering round, stop and immediately re-trigger
+          await fetch("/api/training/stop-round", { method: "POST" });
+          setTimeout(async () => {
+            await fetch("/api/training/run-round", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                epochs,
+                learning_rate: learningRate,
+                active_node_ids: activeNodes.map((n) => n.wallet_address || n.name || n.id),
+                partition_mode: partitionMode,
+                row_slices: partitionMode === "ranges" ? rowSlices : undefined,
+              }),
+            });
+          }, 350);
+        }
       }
     } catch (err) {
       console.error("HTTP round execution error", err);

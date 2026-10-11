@@ -227,6 +227,18 @@ def run_live_round(payload: RunRoundRequest = RunRoundRequest()):
     Local Training -> zkML Proof -> Arbitrum Verify -> Relayer -> Solana Reward -> FedAvg.
     """
     import threading
+    if orchestrator.is_round_active:
+        # If already running, return status or if stalled > 40s, auto-clear
+        if time.time() - getattr(orchestrator, "_round_start_time", 0) > 40.0:
+            orchestrator.is_round_active = False
+            orchestrator.stop_requested = False
+        else:
+            return {
+                "status": "ALREADY_ACTIVE",
+                "round_id": orchestrator.fl_coordinator.current_round + 1,
+                "message": "A federated round is currently executing. Await completion or stop early.",
+            }
+
     threading.Thread(
         target=orchestrator.execute_live_round,
         args=(

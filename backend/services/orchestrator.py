@@ -795,15 +795,21 @@ class NetworkOrchestrator:
         6. New global model registered on Arbitrum and indexed in database.
         """
         if self.is_round_active:
-            return {
-                "status": "ALREADY_ACTIVE",
-                "message": "A federated round is currently executing. Await completion or stop early.",
-                "round_id": self.fl_coordinator.current_round + 1,
-            }
+            # Auto-heal: If marked active for > 45s, automatically reset so operator is never frozen
+            if time.time() - getattr(self, "_round_start_time", 0) > 45.0:
+                self.is_round_active = False
+                self.stop_requested = False
+            else:
+                return {
+                    "status": "ALREADY_ACTIVE",
+                    "message": "A federated round is currently executing. Await completion or stop early.",
+                    "round_id": self.fl_coordinator.current_round + 1,
+                }
 
         self.is_round_active = True
         self.stop_requested = False
         start_time = time.time()
+        self._round_start_time = start_time
 
         actual_epochs = max(1, int(local_epochs))
 
@@ -971,6 +977,9 @@ class NetworkOrchestrator:
                 cur_w = client.local_model.get_weights_flat()
                 delta_norm = float(np.linalg.norm(cur_w - base_weights))
 
+                # Stream clean, genuine per-epoch SGD training log to node console
+                log_msg(client.name, f"[LOCAL_SGD] Epoch {ep}/{actual_epochs}: Loss = {avg_loss:.4f} | Accuracy = {cur_acc:.1f}% | Grad Delta = {delta_norm:.4f}")
+
                 ws_manager.broadcast_sync("EPOCH_PROGRESS", {
                     "client_name": client.name,
                     "client_id": client.client_id,
@@ -993,12 +1002,13 @@ class NetworkOrchestrator:
                 "round_number": round_number,
             })
 
-            # Natural per-epoch pacing so external daemons and UI train in lockstep
-            time.sleep(1.2)
+            # Fast, smooth natural pacing capped to ~2.5s total across all epochs
+            ep_sleep = max(0.04, min(0.6, 2.5 / float(actual_epochs)))
+            time.sleep(ep_sleep)
 
         # Check if we need to synchronize with native worker daemons
         if online_daemons:
-            max_daemon_wait = min(20.0, max(6.0, actual_epochs * 1.5))
+            max_daemon_wait = min(6.0, max(2.0, actual_epochs * 0.3))
             log_msg("Coordinator", f"[DAEMON_SYNC] Awaiting updates from {len(online_daemons)} native worker daemon(s) (timeout: {max_daemon_wait:.1f}s)...")
             start_wait = time.time()
             while (time.time() - start_wait < max_daemon_wait) and not self.stop_requested:
@@ -1010,7 +1020,7 @@ class NetworkOrchestrator:
                 if all_received:
                     log_msg("Coordinator", f"[DAEMON_SYNC] Successfully synchronized update(s) from native worker daemon(s)!")
                     break
-                time.sleep(0.5)
+                time.sleep(0.3)
 
         # -------------------------------------------------------------
         # STEP 2: LOCAL RESULTS FINALIZATION & ZKML PROOF SYNTHESIS
@@ -1447,6 +1457,7 @@ class NetworkOrchestrator:
             db.close()
             self.is_round_active = False
             self.stop_requested = False
+            self.worker_jobs = {"active": False}
 
         self.last_round_logs = node_logs
         self.last_round_number = round_number
