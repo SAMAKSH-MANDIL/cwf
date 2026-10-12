@@ -291,13 +291,18 @@ cwf/
 
 ---
 
-## 🚀 Quick Start Guide
+## 🚀 Quick Start Guide (Project Kaise Chalu Karein)
+
+Follow these steps to run the complete decentralized network locally or across multiple laptops on the same Wi-Fi network.
 
 ### 1. Prerequisites
-- **Python**: 3.10+
-- **Node.js**: 18+ (Node 20+ recommended)
+- **Python**: 3.10+ installed ([python.org](https://www.python.org/downloads/))
+- **Node.js**: 18+ (Node 20+ recommended) ([nodejs.org](https://nodejs.org/))
+- **Git**: Installed
 
-### 2. Backend Setup
+---
+
+### 2. Initial Setup (Clone & Install)
 ```bash
 # Clone the repository
 git clone https://github.com/SAMAKSH-MANDIL/cwf.git
@@ -306,25 +311,76 @@ cd cwf
 # Install Python dependencies
 pip install -r requirements.txt
 
-# Start the FastAPI coordinator server
-python -m uvicorn backend.api.main:app --host 0.0.0.0 --port 8000 --reload
-```
-API Documentation: `http://localhost:8000/docs`
-
-### 3. Frontend Setup
-In a new terminal window:
-```bash
+# Install Web dependencies
 cd apps/web
 npm install
+cd ../..
+```
+
+---
+
+### 3. Step-by-Step Running Instructions
+
+#### 🔹 Terminal 1: Start Backend Coordinator (FastAPI + WebSockets)
+Open your first terminal in the project root directory (`cwf`):
+```bash
+python -m uvicorn backend.api.main:app --host 0.0.0.0 --port 8000 --reload
+```
+- **Backend API & WebSockets**: `http://localhost:8000`
+- **Interactive Swagger Docs**: `http://localhost:8000/docs`
+- *Note:* `--host 0.0.0.0` allows other laptops and phones on your local Wi-Fi to communicate with this coordinator.
+
+---
+
+#### 🔹 Terminal 2: Start Frontend Web Dashboard (Next.js)
+Open a second terminal window and navigate to the web directory:
+```bash
+cd apps/web
 npm run dev
 ```
-Open **`http://localhost:3000`** in your browser.
+- **Main Web Application**: **`http://localhost:3000`**
+- **Live Federated Training Page**: **`http://localhost:3000/training`**
+- **Compute Providers Registry**: `http://localhost:3000/providers`
+- **On-Chain Model Lineage**: `http://localhost:3000/models`
+
+---
+
+#### 🔹 Terminal 3 (Optional): Connect Another Laptop / Edge Worker on Same Wi-Fi
+To connect a secondary laptop, mobile device, or remote GPU server into the federated training mesh:
+
+1. **Find your host laptop's local IP address:**
+   - **Windows:** Run `ipconfig` (Look for `IPv4 Address` under your active Wi-Fi adapter, e.g., `192.168.1.27`).
+   - **Mac / Linux:** Run `ifconfig` or `ip a` (e.g., `192.168.1.27`).
+
+2. **Access Web UI from the other laptop / phone:**
+   - Open browser on the second device: **`http://<HOST_IP>:3000/training`** (e.g., `http://192.168.1.27:3000/training`)
+
+3. **Run the Native Worker Daemon on the other laptop:**
+   The worker script has **zero third-party dependencies** (runs on standard Python with automatic GPU/CPU auto-detection):
+   ```bash
+   # Option A: Direct download via browser or curl
+   curl -O http://<HOST_IP>:8000/api/worker/download -o fedzero_worker.py
+
+   # Option B: Run worker daemon
+   python fedzero_worker.py --server http://<HOST_IP>:8000 --name "Laptop_2_Worker"
+   ```
+   *The secondary device will instantly handshake with the coordinator, appear as green/online in the Web UI, and participate in federated SGD.*
+
+---
 
 ### 4. Running a Live Federated Training Round
-1. Open `http://localhost:3000/training`.
-2. Select a dataset (e.g., **Genomic Multi-Omics Sequencing**).
-3. Configure your desired epochs and learning rate.
-4. Click **START TRAINING ROUND ⚡** to observe real-time native hardware convergence, loss decay, Halo2 zkML proof synthesis, and dual-chain settlement.
+
+1. Open **`http://localhost:3000/training`** in your browser.
+2. **Select Dataset & Target Column:** Choose curated clinical datasets (e.g., *Pneumonia EHR Diagnostics*, *Genomic Multi-Omics*).
+3. **Partition Mode:** Choose **Equal Split** across connected nodes, or **Manual Row Ranges** for custom enclave allocations.
+4. **Configure Hyperparameters:** Set desired epochs (e.g., 4 to 20 epochs) and learning rate ($\eta = 0.03$).
+5. **Click `START TRAINING ROUND ⚡`**:
+   - **Step 1 (Edge SGD):** Real-time loss decay, accuracy gains, and weights delta norms stream live into multi-terminal consoles.
+   - **Step 2 (zkML Prover):** Halo2 arithmetic circuit compiles private gradient execution traces into a succinct KZG proof.
+   - **Step 3 (Arbitrum EVM):** Verifies cryptographic pairing check on `ZKVerifier.sol` and updates on-chain `AIPassport.sol`.
+   - **Step 4 (Cross-Chain Relayer):** Relayer captures Arbitrum events and bridges validity proofs across chains.
+   - **Step 5 (Solana Settlement):** Solana program mints SOL compute reward tokens to contributor wallets and executes Byzantine-resilient FedAvg into the new global model.
+6. **Console Controls:** Use **Auto-Scroll (ON/OFF)**, **Fullscreen ⛶**, and node-specific tabs to inspect exact terminal telemetry from each participating device.
 
 ---
 
